@@ -297,6 +297,13 @@ func (t *Transformer) buildAggregatedWorker(md *kubeairunwayv1alpha1.ModelDeploy
 		},
 	}
 
+	// Add LoRA env vars to worker container
+	if loraEnv := t.loraEnvVars(md); len(loraEnv) > 0 {
+		mainContainer := worker["extraPodSpec"].(map[string]interface{})["mainContainer"].(map[string]interface{})
+		existingEnv, _ := mainContainer["env"].([]interface{})
+		mainContainer["env"] = append(existingEnv, loraEnv...)
+	}
+
 	// Add secret reference if specified
 	if md.Spec.Secrets != nil && md.Spec.Secrets.HuggingFaceToken != "" {
 		worker["envFromSecret"] = md.Spec.Secrets.HuggingFaceToken
@@ -353,6 +360,13 @@ func (t *Transformer) buildPrefillWorker(md *kubeairunwayv1alpha1.ModelDeploymen
 				"args":    toInterfaceSlice(args),
 			},
 		},
+	}
+
+	// Add LoRA env vars to worker container
+	if loraEnv := t.loraEnvVars(md); len(loraEnv) > 0 {
+		mainContainer := worker["extraPodSpec"].(map[string]interface{})["mainContainer"].(map[string]interface{})
+		existingEnv, _ := mainContainer["env"].([]interface{})
+		mainContainer["env"] = append(existingEnv, loraEnv...)
 	}
 
 	// Add secret reference if specified
@@ -412,6 +426,13 @@ func (t *Transformer) buildDecodeWorker(md *kubeairunwayv1alpha1.ModelDeployment
 		},
 	}
 
+	// Add LoRA env vars to worker container
+	if loraEnv := t.loraEnvVars(md); len(loraEnv) > 0 {
+		mainContainer := worker["extraPodSpec"].(map[string]interface{})["mainContainer"].(map[string]interface{})
+		existingEnv, _ := mainContainer["env"].([]interface{})
+		mainContainer["env"] = append(existingEnv, loraEnv...)
+	}
+
 	// Add secret reference if specified
 	if md.Spec.Secrets != nil && md.Spec.Secrets.HuggingFaceToken != "" {
 		worker["envFromSecret"] = md.Spec.Secrets.HuggingFaceToken
@@ -421,6 +442,19 @@ func (t *Transformer) buildDecodeWorker(md *kubeairunwayv1alpha1.ModelDeployment
 	t.addSchedulingConfig(worker, md)
 
 	return worker, nil
+}
+
+// loraEnvVars returns Dynamo LoRA environment variables when adapters are specified
+func (t *Transformer) loraEnvVars(md *kubeairunwayv1alpha1.ModelDeployment) []interface{} {
+	if len(md.Spec.Adapters) == 0 {
+		return nil
+	}
+	return []interface{}{
+		map[string]interface{}{"name": "DYN_LORA_ENABLED", "value": "true"},
+		map[string]interface{}{"name": "DYN_SYSTEM_ENABLED", "value": "true"},
+		map[string]interface{}{"name": "DYN_SYSTEM_PORT", "value": "9090"},
+		map[string]interface{}{"name": "DYN_LORA_PATH", "value": "/tmp/dynamo_loras"},
+	}
 }
 
 // buildResourceLimits creates resource limits and requests from ResourceSpec
@@ -484,6 +518,11 @@ func (t *Transformer) buildEngineArgs(md *kubeairunwayv1alpha1.ModelDeployment) 
 		case kubeairunwayv1alpha1.EngineTypeVLLM, kubeairunwayv1alpha1.EngineTypeSGLang:
 			args = append(args, "--trust-remote-code")
 		}
+	}
+
+	// Add LoRA args when adapters are specified
+	if len(md.Spec.Adapters) > 0 {
+		args = append(args, "--enable-lora")
 	}
 
 	// Add custom engine args with key validation (sorted for deterministic output)
