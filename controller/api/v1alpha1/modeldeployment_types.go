@@ -17,6 +17,8 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"strings"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -238,6 +240,35 @@ type GatewaySpec struct {
 	HTTPRouteRef string `json:"httpRouteRef,omitempty"`
 }
 
+// LoRAAdapterSpec defines a LoRA adapter to load with the base model
+type LoRAAdapterSpec struct {
+	// name is the adapter identifier used in API requests.
+	// For vLLM/SGLang, this becomes the model name clients use in requests.
+	// If omitted, defaults to the ID extracted from the source URI.
+	// +optional
+	Name string `json:"name,omitempty"`
+
+	// source is a URI pointing to the adapter weights.
+	// Supported schemes:
+	//   hf://  — HuggingFace adapter repo (e.g., "hf://user/my-lora-adapter")
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=`^(hf)://`
+	Source string `json:"source"`
+}
+
+// AdapterStatus reports the status of a loaded LoRA adapter
+type AdapterStatus struct {
+	// name is the adapter identifier
+	Name string `json:"name"`
+
+	// loaded indicates whether the adapter is currently loaded
+	Loaded bool `json:"loaded"`
+
+	// message provides additional information
+	// +optional
+	Message string `json:"message,omitempty"`
+}
+
 // ModelDeploymentSpec defines the desired state of ModelDeployment
 type ModelDeploymentSpec struct {
 	// model defines the model specification
@@ -292,6 +323,14 @@ type ModelDeploymentSpec struct {
 	// tolerations are tolerations for the pods
 	// +optional
 	Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
+
+	// adapters defines LoRA adapters to load alongside the base model.
+	// When set, the engine is automatically configured for LoRA serving.
+	// Each adapter becomes available for per-request selection via the model name.
+	// Engine-specific tuning (max-lora-rank, max-loras, etc.) can be set via spec.engine.args.
+	// +optional
+	// +kubebuilder:validation:MaxItems=64
+	Adapters []LoRAAdapterSpec `json:"adapters,omitempty"`
 }
 
 // ProviderStatus contains information about the selected provider
@@ -396,6 +435,10 @@ type ModelDeploymentStatus struct {
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
+	// adapters reports the status of loaded LoRA adapters
+	// +optional
+	Adapters []AdapterStatus `json:"adapters,omitempty"`
+
 	// observedGeneration is the generation observed by the controller
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
@@ -446,6 +489,21 @@ func (md *ModelDeployment) ResolvedEngineType() EngineType {
 		return md.Status.Engine.Type
 	}
 	return ""
+}
+
+// ResolvedAdapterName returns the effective name for a LoRA adapter.
+// If Name is explicitly set, it is returned. Otherwise, the name is
+// extracted from the source URI by stripping the scheme prefix.
+func ResolvedAdapterName(adapter LoRAAdapterSpec) string {
+	if adapter.Name != "" {
+		return adapter.Name
+	}
+	// Strip scheme prefix (e.g., "hf://user/model" → "user/model")
+	source := adapter.Source
+	if idx := strings.Index(source, "://"); idx >= 0 {
+		return source[idx+3:]
+	}
+	return source
 }
 
 // Condition types for ModelDeployment

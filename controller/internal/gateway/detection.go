@@ -34,6 +34,13 @@ const (
 	// HTTPRouteCRDResource is the resource name for HTTPRoute
 	HTTPRouteCRDResource = "httproutes"
 
+	// InferenceObjectiveCRDGroup is the API group for InferenceObjective
+	InferenceObjectiveCRDGroup = "inference.networking.x-k8s.io"
+	// InferenceObjectiveCRDVersion is the API version for InferenceObjective
+	InferenceObjectiveCRDVersion = "v1alpha1"
+	// InferenceObjectiveCRDResource is the resource name for InferenceObjective
+	InferenceObjectiveCRDResource = "inferenceobjectives"
+
 	// GatewayCRDResource is the resource name for Gateway
 	GatewayCRDResource = "gateways"
 
@@ -162,6 +169,11 @@ func (d *Detector) checkCRD(ctx context.Context, group, version, resource string
 
 	log.V(1).Info("Resource not found in API group version", "resource", resource, "groupVersion", gv)
 	return false
+}
+
+// IsInferenceObjectiveAvailable checks if the InferenceObjective CRD is installed.
+func (d *Detector) IsInferenceObjectiveAvailable(ctx context.Context) bool {
+	return d.checkCRD(ctx, InferenceObjectiveCRDGroup, InferenceObjectiveCRDVersion, InferenceObjectiveCRDResource)
 }
 
 // HasExplicitGateway returns true if gateway name/namespace were explicitly configured

@@ -151,6 +151,20 @@ func (t *Transformer) buildInference(md *kubeairunwayv1alpha1.ModelDeployment) (
 		inference["preset"] = map[string]interface{}{
 			"name": md.Spec.Model.ID,
 		}
+		// Add LoRA adapters if specified
+		if len(md.Spec.Adapters) > 0 {
+			adapters := make([]interface{}, 0, len(md.Spec.Adapters))
+			for _, a := range md.Spec.Adapters {
+				name := kubeairunwayv1alpha1.ResolvedAdapterName(a)
+				adapter := map[string]interface{}{
+					"source": map[string]interface{}{
+						"name": name,
+					},
+				}
+				adapters = append(adapters, adapter)
+			}
+			inference["adapters"] = adapters
+		}
 	case kubeairunwayv1alpha1.EngineTypeLlamaCpp:
 		// llamacpp template path: user-provided image with pod template
 		template, err := t.buildLlamaCppTemplate(md)

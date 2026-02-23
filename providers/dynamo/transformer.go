@@ -285,6 +285,9 @@ func (t *Transformer) buildAggregatedWorker(md *kubeairunwayv1alpha1.ModelDeploy
 		"dynamoNamespace": md.Name,
 		"replicas":        replicas,
 		"resources":       resources,
+		"modelRef": map[string]interface{}{
+			"name": md.Spec.Model.ID,
+		},
 		"extraPodSpec": map[string]interface{}{
 			"labels": map[string]interface{}{
 				"kubeairunway.ai/model-deployment": md.Name,
@@ -303,6 +306,9 @@ func (t *Transformer) buildAggregatedWorker(md *kubeairunwayv1alpha1.ModelDeploy
 		existingEnv, _ := mainContainer["env"].([]interface{})
 		mainContainer["env"] = append(existingEnv, loraEnv...)
 	}
+
+	// Add init containers for downloading HF LoRA adapters
+	t.addLoRAInitContainers(worker, md, image)
 
 	// Add secret reference if specified
 	if md.Spec.Secrets != nil && md.Spec.Secrets.HuggingFaceToken != "" {
@@ -350,6 +356,9 @@ func (t *Transformer) buildPrefillWorker(md *kubeairunwayv1alpha1.ModelDeploymen
 		"dynamoNamespace":  md.Name,
 		"replicas":         int64(prefillSpec.Replicas),
 		"resources":        resources,
+		"modelRef": map[string]interface{}{
+			"name": md.Spec.Model.ID,
+		},
 		"extraPodSpec": map[string]interface{}{
 			"labels": map[string]interface{}{
 				"kubeairunway.ai/model-deployment": md.Name,
@@ -368,6 +377,9 @@ func (t *Transformer) buildPrefillWorker(md *kubeairunwayv1alpha1.ModelDeploymen
 		existingEnv, _ := mainContainer["env"].([]interface{})
 		mainContainer["env"] = append(existingEnv, loraEnv...)
 	}
+
+	// Add init containers for downloading HF LoRA adapters
+	t.addLoRAInitContainers(worker, md, image)
 
 	// Add secret reference if specified
 	if md.Spec.Secrets != nil && md.Spec.Secrets.HuggingFaceToken != "" {
@@ -414,6 +426,9 @@ func (t *Transformer) buildDecodeWorker(md *kubeairunwayv1alpha1.ModelDeployment
 		"dynamoNamespace":  md.Name,
 		"replicas":         int64(decodeSpec.Replicas),
 		"resources":        resources,
+		"modelRef": map[string]interface{}{
+			"name": md.Spec.Model.ID,
+		},
 		"extraPodSpec": map[string]interface{}{
 			"labels": map[string]interface{}{
 				"kubeairunway.ai/model-deployment": md.Name,
@@ -432,6 +447,9 @@ func (t *Transformer) buildDecodeWorker(md *kubeairunwayv1alpha1.ModelDeployment
 		existingEnv, _ := mainContainer["env"].([]interface{})
 		mainContainer["env"] = append(existingEnv, loraEnv...)
 	}
+
+	// Add init containers for downloading HF LoRA adapters
+	t.addLoRAInitContainers(worker, md, image)
 
 	// Add secret reference if specified
 	if md.Spec.Secrets != nil && md.Spec.Secrets.HuggingFaceToken != "" {
@@ -453,8 +471,95 @@ func (t *Transformer) loraEnvVars(md *kubeairunwayv1alpha1.ModelDeployment) []in
 		map[string]interface{}{"name": "DYN_LORA_ENABLED", "value": "true"},
 		map[string]interface{}{"name": "DYN_SYSTEM_ENABLED", "value": "true"},
 		map[string]interface{}{"name": "DYN_SYSTEM_PORT", "value": "9090"},
-		map[string]interface{}{"name": "DYN_LORA_PATH", "value": "/tmp/dynamo_loras"},
+		map[string]interface{}{"name": "DYN_LORA_PATH", "value": loraAdaptersMountPath},
 	}
+}
+
+const (
+	// loraAdaptersVolumeName is the shared volume for downloaded LoRA adapters
+	loraAdaptersVolumeName = "lora-adapters"
+	// loraAdaptersMountPath is where adapters are mounted in the worker container
+	loraAdaptersMountPath = "/adapters"
+)
+
+// addLoRAInitContainers adds init containers and volumes to a worker's extraPodSpec
+// for downloading HuggingFace LoRA adapters to a shared volume.
+func (t *Transformer) addLoRAInitContainers(worker map[string]interface{}, md *kubeairunwayv1alpha1.ModelDeployment, image string) {
+	if len(md.Spec.Adapters) == 0 {
+		return
+	}
+
+	extraPodSpec := worker["extraPodSpec"].(map[string]interface{})
+
+	// Add shared volume for adapters
+	volumes := []interface{}{
+		map[string]interface{}{
+			"name":     loraAdaptersVolumeName,
+			"emptyDir": map[string]interface{}{},
+		},
+	}
+	extraPodSpec["volumes"] = volumes
+
+	// Add volume mount to main container
+	mainContainer := extraPodSpec["mainContainer"].(map[string]interface{})
+	mainContainer["volumeMounts"] = []interface{}{
+		map[string]interface{}{
+			"name":      loraAdaptersVolumeName,
+			"mountPath": loraAdaptersMountPath,
+		},
+	}
+
+	// Build init containers for each HF adapter
+	var initContainers []interface{}
+	for _, a := range md.Spec.Adapters {
+		if !strings.HasPrefix(a.Source, "hf://") {
+			continue
+		}
+		name := kubeairunwayv1alpha1.ResolvedAdapterName(a)
+		hfID := a.Source[5:] // strip hf://
+		adapterDir := fmt.Sprintf("%s/%s", loraAdaptersMountPath, name)
+
+		initContainer := map[string]interface{}{
+			"name":  fmt.Sprintf("download-%s", sanitizeLabelValue(name)),
+			"image": image,
+			"command": []interface{}{
+				"python", "-c",
+				fmt.Sprintf("from huggingface_hub import snapshot_download; snapshot_download('%s', local_dir='%s')", hfID, adapterDir),
+			},
+			"volumeMounts": []interface{}{
+				map[string]interface{}{
+					"name":      loraAdaptersVolumeName,
+					"mountPath": loraAdaptersMountPath,
+				},
+			},
+		}
+
+		// Pass HF_TOKEN env var if secrets are configured
+		if md.Spec.Secrets != nil && md.Spec.Secrets.HuggingFaceToken != "" {
+			initContainer["env"] = []interface{}{
+				map[string]interface{}{
+					"name": "HF_TOKEN",
+					"valueFrom": map[string]interface{}{
+						"secretKeyRef": map[string]interface{}{
+							"name": md.Spec.Secrets.HuggingFaceToken,
+							"key":  "HF_TOKEN",
+						},
+					},
+				},
+			}
+		}
+
+		initContainers = append(initContainers, initContainer)
+	}
+
+	if len(initContainers) > 0 {
+		extraPodSpec["initContainers"] = initContainers
+	}
+}
+
+// loraAdapterLocalPath returns the file:// URI for a locally-downloaded adapter
+func loraAdapterLocalPath(adapterName string) string {
+	return fmt.Sprintf("file://%s/%s", loraAdaptersMountPath, adapterName)
 }
 
 // buildResourceLimits creates resource limits and requests from ResourceSpec
@@ -589,9 +694,9 @@ func toInterfaceSlice(ss []string) []interface{} {
 
 // defaultImages contains the default container images for each engine type
 var defaultImages = map[kubeairunwayv1alpha1.EngineType]string{
-	kubeairunwayv1alpha1.EngineTypeVLLM:   "nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.7.1",
-	kubeairunwayv1alpha1.EngineTypeSGLang: "nvcr.io/nvidia/ai-dynamo/sglang-runtime:0.7.1",
-	kubeairunwayv1alpha1.EngineTypeTRTLLM: "nvcr.io/nvidia/ai-dynamo/trtllm-runtime:0.7.1",
+	kubeairunwayv1alpha1.EngineTypeVLLM:   "nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.9.0",
+	kubeairunwayv1alpha1.EngineTypeSGLang: "nvcr.io/nvidia/ai-dynamo/sglang-runtime:0.9.0",
+	kubeairunwayv1alpha1.EngineTypeTRTLLM: "nvcr.io/nvidia/ai-dynamo/trtllm-runtime:0.9.0",
 }
 
 // getImage returns the container image to use
@@ -607,7 +712,7 @@ func (t *Transformer) getImage(md *kubeairunwayv1alpha1.ModelDeployment) string 
 	}
 
 	// Fallback to vLLM default
-	return "nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.7.1"
+	return "nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.9.0"
 }
 
 // addSchedulingConfig adds node selector and tolerations to a service

@@ -745,6 +745,45 @@ func TestBuildResourceRequestsGPUOnly(t *testing.T) {
 	}
 }
 
+func TestTransformVLLMWithAdapters(t *testing.T) {
+	tr := NewTransformer()
+	md := newTestMD("test-model", "default")
+	md.Spec.Adapters = []kubeairunwayv1alpha1.LoRAAdapterSpec{
+		{Name: "my-adapter", Source: "hf://user/my-lora"},
+		{Source: "hf://org/auto-named-adapter"},
+	}
+
+	resources, err := tr.Transform(context.Background(), md)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ws := resources[0]
+	inference, _, _ := unstructured.NestedMap(ws.Object, "inference")
+
+	adapters, ok := inference["adapters"].([]interface{})
+	if !ok {
+		t.Fatal("expected inference.adapters to be a slice")
+	}
+	if len(adapters) != 2 {
+		t.Fatalf("expected 2 adapters, got %d", len(adapters))
+	}
+
+	// First adapter: explicit name
+	a0, _ := adapters[0].(map[string]interface{})
+	src0, _ := a0["source"].(map[string]interface{})
+	if src0["name"] != "my-adapter" {
+		t.Errorf("expected adapter name 'my-adapter', got %v", src0["name"])
+	}
+
+	// Second adapter: auto-derived name from source
+	a1, _ := adapters[1].(map[string]interface{})
+	src1, _ := a1["source"].(map[string]interface{})
+	if src1["name"] != "org/auto-named-adapter" {
+		t.Errorf("expected auto-derived adapter name 'org/auto-named-adapter', got %v", src1["name"])
+	}
+}
+
 func TestTransformPreservesOwnerReference(t *testing.T) {
 	tr := NewTransformer()
 	md := newTestMD("test-model", "default")

@@ -60,6 +60,7 @@ type ModelDeploymentReconciler struct {
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=inference.networking.x-k8s.io,resources=inferenceobjectives;inferencemodelrewrites,verbs=get;list;watch
+// +kubebuilder:rbac:groups=inference.networking.x-k8s.io,resources=inferenceobjectives,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile handles the reconciliation loop for ModelDeployment resources.
 //
@@ -352,6 +353,11 @@ func (r *ModelDeploymentReconciler) selectEngine(ctx context.Context, md *kubeai
 			continue
 		}
 
+		// Filter by LoRA support when adapters are specified
+		if len(md.Spec.Adapters) > 0 && !caps.LoRASupport {
+			continue
+		}
+
 		for _, engine := range caps.Engines {
 			// Skip GPU-requiring engines for CPU-only deployments
 			if !hasGPU && gpuRequiringEngines[engine] {
@@ -520,6 +526,11 @@ func (r *ModelDeploymentReconciler) runSelectionAlgorithm(md *kubeairunwayv1alph
 			}
 		}
 		if !servingModeSupported {
+			continue
+		}
+
+		// Filter by LoRA support when adapters are specified
+		if len(md.Spec.Adapters) > 0 && !caps.LoRASupport {
 			continue
 		}
 

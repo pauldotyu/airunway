@@ -18,16 +18,19 @@ package controller
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -106,6 +109,14 @@ func (r *ModelDeploymentReconciler) reconcileGateway(ctx context.Context, md *ku
 		if err := r.reconcileHTTPRoute(ctx, md, gwConfig, modelName); err != nil {
 			r.setCondition(md, kubeairunwayv1alpha1.ConditionTypeGatewayReady, metav1.ConditionFalse, "HTTPRouteFailed", err.Error())
 			return fmt.Errorf("reconciling HTTPRoute: %w", err)
+		}
+	}
+
+	// Create InferenceObjective resources for LoRA adapters
+	if len(md.Spec.Adapters) > 0 && r.GatewayDetector.IsInferenceObjectiveAvailable(ctx) {
+		if err := r.reconcileAdapterObjectives(ctx, md); err != nil {
+			logger.Error(err, "Failed to reconcile adapter InferenceObjectives", "name", md.Name)
+			// Non-fatal: gateway is functional, adapter routing is optional
 		}
 	}
 
@@ -710,8 +721,131 @@ func (r *ModelDeploymentReconciler) cleanupGatewayResources(ctx context.Context,
 		}
 	}
 
+	// Delete InferenceObjective resources for adapters
+	if r.GatewayDetector != nil && r.GatewayDetector.IsInferenceObjectiveAvailable(ctx) {
+		r.cleanupOrphanedObjectives(ctx, md, map[string]bool{})
+	}
+
 	md.Status.Gateway = nil
 	r.setCondition(md, kubeairunwayv1alpha1.ConditionTypeGatewayReady, metav1.ConditionFalse, "GatewayDisabled", "Gateway resources cleaned up")
 	logger.Info("Gateway resources cleaned up", "name", md.Name)
 	return nil
+}
+
+// reconcileAdapterObjectives creates InferenceObjective resources for each LoRA adapter.
+// These enable the EPP to route requests for specific adapters to pods that have them loaded.
+func (r *ModelDeploymentReconciler) reconcileAdapterObjectives(ctx context.Context, md *kubeairunwayv1alpha1.ModelDeployment) error {
+	logger := log.FromContext(ctx)
+
+	// Track which objectives should exist
+	desiredObjectives := make(map[string]bool)
+
+	for _, adapter := range md.Spec.Adapters {
+		adapterName := kubeairunwayv1alpha1.ResolvedAdapterName(adapter)
+		objectiveName := adapterObjectiveName(md.Name, adapterName)
+		desiredObjectives[objectiveName] = true
+
+		objective := &unstructured.Unstructured{}
+		objective.SetAPIVersion("inference.networking.x-k8s.io/v1alpha1")
+		objective.SetKind("InferenceObjective")
+		objective.SetName(objectiveName)
+		objective.SetNamespace(md.Namespace)
+
+		result, err := ctrl.CreateOrUpdate(ctx, r.Client, objective, func() error {
+			objective.SetLabels(map[string]string{
+				kubeairunwayv1alpha1.LabelModelDeployment: md.Name,
+				"kubeairunway.ai/adapter-name":           sanitizeLabelValue(adapterName),
+			})
+
+			spec := map[string]interface{}{
+				"targetModel": adapterName,
+				"poolRef": map[string]interface{}{
+					"name": md.Name,
+				},
+			}
+			if err := unstructured.SetNestedField(objective.Object, spec, "spec"); err != nil {
+				return fmt.Errorf("failed to set InferenceObjective spec: %w", err)
+			}
+
+			return ctrl.SetControllerReference(md, objective, r.Scheme)
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create/update InferenceObjective %s: %w", objectiveName, err)
+		}
+		logger.V(1).Info("InferenceObjective reconciled", "name", objectiveName, "result", result)
+	}
+
+	// Clean up objectives for adapters that no longer exist
+	return r.cleanupOrphanedObjectives(ctx, md, desiredObjectives)
+}
+
+// cleanupOrphanedObjectives removes InferenceObjective resources that no longer have matching adapters
+func (r *ModelDeploymentReconciler) cleanupOrphanedObjectives(ctx context.Context, md *kubeairunwayv1alpha1.ModelDeployment, desired map[string]bool) error {
+	logger := log.FromContext(ctx)
+
+	existing := &unstructured.UnstructuredList{}
+	existing.SetAPIVersion("inference.networking.x-k8s.io/v1alpha1")
+	existing.SetKind("InferenceObjectiveList")
+
+	if err := r.List(ctx, existing,
+		client.InNamespace(md.Namespace),
+		client.MatchingLabels{
+			kubeairunwayv1alpha1.LabelModelDeployment: md.Name,
+		},
+	); err != nil {
+		// If CRD doesn't exist, nothing to clean up
+		if isNoMatchError(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to list InferenceObjectives: %w", err)
+	}
+
+	for i := range existing.Items {
+		obj := &existing.Items[i]
+		if !desired[obj.GetName()] {
+			logger.Info("Deleting orphaned InferenceObjective", "name", obj.GetName())
+			if err := r.Delete(ctx, obj); client.IgnoreNotFound(err) != nil {
+				logger.Error(err, "Failed to delete orphaned InferenceObjective", "name", obj.GetName())
+			}
+		}
+	}
+
+	return nil
+}
+
+// adapterObjectiveName returns a unique InferenceObjective name for an adapter
+func adapterObjectiveName(deploymentName, adapterName string) string {
+	sanitized := strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
+			return r
+		}
+		if r >= 'A' && r <= 'Z' {
+			return r + 32 // lowercase
+		}
+		return '-'
+	}, adapterName)
+	sanitized = strings.Trim(sanitized, "-")
+
+	result := fmt.Sprintf("%s-%s", deploymentName, sanitized)
+	if len(result) > 253 {
+		hash := fmt.Sprintf("%x", sha256.Sum256([]byte(result)))
+		suffix := hash[:8]
+		result = result[:253-9] + "-" + suffix
+	}
+	return result
+}
+
+// sanitizeLabelValue ensures a value is valid for a Kubernetes label
+func sanitizeLabelValue(value string) string {
+	if len(value) > 63 {
+		value = value[:63]
+	}
+	value = strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' {
+			return r
+		}
+		return '-'
+	}, value)
+	value = strings.Trim(value, "-_.")
+	return value
 }
