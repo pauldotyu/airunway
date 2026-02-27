@@ -163,8 +163,8 @@ func (t *Transformer) buildRayClusterConfig(md *kubeairunwayv1alpha1.ModelDeploy
 func (t *Transformer) buildHeadGroupSpec(md *kubeairunwayv1alpha1.ModelDeployment) map[string]interface{} {
 	image := t.getImage(md)
 	headMemory := DefaultHeadMemory
-	if md.Spec.Resources != nil && md.Spec.Resources.Memory != "" {
-		headMemory = md.Spec.Resources.Memory
+	if md.Spec.Scaling != nil && md.Spec.Scaling.Memory != "" {
+		headMemory = md.Spec.Scaling.Memory
 	}
 
 	// Build engine args
@@ -225,20 +225,20 @@ func (t *Transformer) buildAggregatedWorkerGroup(md *kubeairunwayv1alpha1.ModelD
 	}
 
 	workerMemory := DefaultWorkerMemory
-	if md.Spec.Resources != nil && md.Spec.Resources.Memory != "" {
-		workerMemory = md.Spec.Resources.Memory
+	if md.Spec.Scaling != nil && md.Spec.Scaling.Memory != "" {
+		workerMemory = md.Spec.Scaling.Memory
 	}
 
 	// Build resource limits
 	limits := map[string]interface{}{
 		"memory": workerMemory,
 	}
-	if md.Spec.Resources != nil && md.Spec.Resources.GPU != nil && md.Spec.Resources.GPU.Count > 0 {
+	if md.Spec.Scaling != nil && md.Spec.Scaling.GPU != nil && md.Spec.Scaling.GPU.Count > 0 {
 		gpuType := "nvidia.com/gpu"
-		if md.Spec.Resources.GPU.Type != "" {
-			gpuType = md.Spec.Resources.GPU.Type
+		if md.Spec.Scaling.GPU.Type != "" {
+			gpuType = md.Spec.Scaling.GPU.Type
 		}
-		limits[gpuType] = fmt.Sprintf("%d", md.Spec.Resources.GPU.Count)
+		limits[gpuType] = fmt.Sprintf("%d", md.Spec.Scaling.GPU.Count)
 	}
 
 	workerGroup := map[string]interface{}{

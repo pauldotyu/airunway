@@ -116,9 +116,9 @@ type SelectionRule struct {
 	// condition is a CEL expression that evaluates to true when this rule matches
 	// The expression has access to the full ModelDeployment spec via `spec.*`
 	// Examples:
-	//   - "!has(spec.resources.gpu) || spec.resources.gpu.count == 0"
+	//   - "!has(spec.scaling.gpu) || spec.scaling.gpu.count == 0"
 	//   - "spec.engine.type == 'llamacpp'"
-	//   - "has(spec.resources.gpu) && spec.resources.gpu.count > 0"
+	//   - "has(spec.scaling.gpu) && spec.scaling.gpu.count > 0"
 	// +kubebuilder:validation:Required
 	Condition string `json:"condition"`
 

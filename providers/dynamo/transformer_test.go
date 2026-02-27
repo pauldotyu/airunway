@@ -29,7 +29,7 @@ func newTestMD(name, namespace string) *kubeairunwayv1alpha1.ModelDeployment {
 			Engine: kubeairunwayv1alpha1.EngineSpec{
 				Type: kubeairunwayv1alpha1.EngineTypeVLLM,
 			},
-			Resources: &kubeairunwayv1alpha1.ResourceSpec{
+			Scaling: &kubeairunwayv1alpha1.ScalingSpec{
 				GPU: &kubeairunwayv1alpha1.GPUSpec{
 					Count: 1,
 				},
@@ -352,7 +352,7 @@ func TestBuildResourceLimits(t *testing.T) {
 	}
 
 	// With GPU
-	result = tr.buildResourceLimits(&kubeairunwayv1alpha1.ResourceSpec{
+	result = tr.buildResourceLimits(&kubeairunwayv1alpha1.ScalingSpec{
 		GPU: &kubeairunwayv1alpha1.GPUSpec{Count: 4, Type: "nvidia.com/gpu"},
 	})
 	limits, _ = result["limits"].(map[string]interface{})
@@ -365,7 +365,7 @@ func TestBuildResourceLimits(t *testing.T) {
 	}
 
 	// With custom GPU type (Dynamo always uses 'gpu' key)
-	result = tr.buildResourceLimits(&kubeairunwayv1alpha1.ResourceSpec{
+	result = tr.buildResourceLimits(&kubeairunwayv1alpha1.ScalingSpec{
 		GPU: &kubeairunwayv1alpha1.GPUSpec{Count: 2, Type: "amd.com/gpu"},
 	})
 	limits, _ = result["limits"].(map[string]interface{})
@@ -374,7 +374,7 @@ func TestBuildResourceLimits(t *testing.T) {
 	}
 
 	// With memory and CPU
-	result = tr.buildResourceLimits(&kubeairunwayv1alpha1.ResourceSpec{
+	result = tr.buildResourceLimits(&kubeairunwayv1alpha1.ScalingSpec{
 		Memory: "32Gi",
 		CPU:    "8",
 	})
@@ -827,7 +827,7 @@ func TestApplyOverridesEscapeHatch(t *testing.T) {
 func TestTransformAggregatedNoGPU(t *testing.T) {
 	tr := NewTransformer()
 	md := newTestMD("test-model", "default")
-	md.Spec.Resources = &kubeairunwayv1alpha1.ResourceSpec{
+	md.Spec.Scaling = &kubeairunwayv1alpha1.ScalingSpec{
 		Memory: "16Gi",
 		CPU:    "4",
 	}
@@ -862,7 +862,7 @@ func TestTransformAggregatedNoGPU(t *testing.T) {
 func TestTransformAggregatedNilResources(t *testing.T) {
 	tr := NewTransformer()
 	md := newTestMD("test-model", "default")
-	md.Spec.Resources = nil
+	md.Spec.Scaling = nil
 
 	resources, err := tr.Transform(context.Background(), md)
 	if err != nil {
@@ -883,7 +883,7 @@ func TestTransformAggregatedNilResources(t *testing.T) {
 func TestTransformAggregatedGPUCount0(t *testing.T) {
 	tr := NewTransformer()
 	md := newTestMD("test-model", "default")
-	md.Spec.Resources = &kubeairunwayv1alpha1.ResourceSpec{
+	md.Spec.Scaling = &kubeairunwayv1alpha1.ScalingSpec{
 		GPU: &kubeairunwayv1alpha1.GPUSpec{Count: 0},
 	}
 
@@ -1082,7 +1082,7 @@ func TestTransformWithCustomImage(t *testing.T) {
 
 func TestBuildResourceLimitsWithAllFields(t *testing.T) {
 	tr := NewTransformer()
-	result := tr.buildResourceLimits(&kubeairunwayv1alpha1.ResourceSpec{
+	result := tr.buildResourceLimits(&kubeairunwayv1alpha1.ScalingSpec{
 		GPU:    &kubeairunwayv1alpha1.GPUSpec{Count: 2},
 		Memory: "64Gi",
 		CPU:    "16",

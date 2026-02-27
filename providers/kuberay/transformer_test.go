@@ -28,7 +28,7 @@ func newTestMD(name, namespace string) *kubeairunwayv1alpha1.ModelDeployment {
 			Engine: kubeairunwayv1alpha1.EngineSpec{
 				Type: kubeairunwayv1alpha1.EngineTypeVLLM,
 			},
-			Resources: &kubeairunwayv1alpha1.ResourceSpec{
+			Scaling: &kubeairunwayv1alpha1.ScalingSpec{
 				GPU: &kubeairunwayv1alpha1.GPUSpec{
 					Count: 1,
 				},
@@ -433,7 +433,7 @@ func TestBuildHeadGroupSpec(t *testing.T) {
 func TestBuildHeadGroupSpecWithCustomMemory(t *testing.T) {
 	tr := NewTransformer()
 	md := newTestMD("test", "default")
-	md.Spec.Resources = &kubeairunwayv1alpha1.ResourceSpec{
+	md.Spec.Scaling = &kubeairunwayv1alpha1.ScalingSpec{
 		Memory: "64Gi",
 		GPU:    &kubeairunwayv1alpha1.GPUSpec{Count: 1},
 	}
@@ -453,9 +453,9 @@ func TestBuildHeadGroupSpecWithCustomMemory(t *testing.T) {
 func TestBuildAggregatedWorkerGroup(t *testing.T) {
 	tr := NewTransformer()
 	md := newTestMD("test", "default")
-	md.Spec.Scaling = &kubeairunwayv1alpha1.ScalingSpec{Replicas: 2}
-	md.Spec.Resources = &kubeairunwayv1alpha1.ResourceSpec{
-		GPU: &kubeairunwayv1alpha1.GPUSpec{Count: 4, Type: "nvidia.com/gpu"},
+	md.Spec.Scaling = &kubeairunwayv1alpha1.ScalingSpec{
+		Replicas: 2,
+		GPU:      &kubeairunwayv1alpha1.GPUSpec{Count: 4, Type: "nvidia.com/gpu"},
 	}
 
 	groups := tr.buildAggregatedWorkerGroup(md)
@@ -475,7 +475,7 @@ func TestBuildAggregatedWorkerGroup(t *testing.T) {
 func TestBuildAggregatedWorkerGroupCustomGPU(t *testing.T) {
 	tr := NewTransformer()
 	md := newTestMD("test", "default")
-	md.Spec.Resources = &kubeairunwayv1alpha1.ResourceSpec{
+	md.Spec.Scaling = &kubeairunwayv1alpha1.ScalingSpec{
 		GPU:    &kubeairunwayv1alpha1.GPUSpec{Count: 2, Type: "amd.com/gpu"},
 		Memory: "64Gi",
 	}

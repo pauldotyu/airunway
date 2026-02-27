@@ -16,7 +16,6 @@ spec:
     mode: aggregated
   scaling:
     replicas: 1
-  resources:
     gpu:
       count: 1
     memory: "32Gi"
@@ -41,7 +40,6 @@ spec:
     mode: aggregated
   scaling:
     replicas: 1
-  resources:
     memory: "16Gi"
     cpu: "8"
   image: "ghcr.io/sozercan/llama-cpp-runner:latest"

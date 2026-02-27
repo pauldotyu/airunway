@@ -272,7 +272,7 @@ func (t *Transformer) buildAggregatedWorker(md *kubeairunwayv1alpha1.ModelDeploy
 	}
 
 	// Build resource limits
-	resources := t.buildResourceLimits(md.Spec.Resources)
+	resources := t.buildResourceLimits(md.Spec.Scaling)
 
 	// Build engine arguments
 	args, err := t.buildEngineArgs(md)
@@ -423,8 +423,8 @@ func (t *Transformer) buildDecodeWorker(md *kubeairunwayv1alpha1.ModelDeployment
 	return worker, nil
 }
 
-// buildResourceLimits creates resource limits and requests from ResourceSpec
-func (t *Transformer) buildResourceLimits(spec *kubeairunwayv1alpha1.ResourceSpec) map[string]interface{} {
+// buildResourceLimits creates resource limits and requests from ScalingSpec
+func (t *Transformer) buildResourceLimits(spec *kubeairunwayv1alpha1.ScalingSpec) map[string]interface{} {
 	limits := map[string]interface{}{}
 	requests := map[string]interface{}{}
 

@@ -321,7 +321,7 @@ func TestTransformWithResources(t *testing.T) {
 	md := newTestMD("test-model", "default")
 	md.Spec.Engine.Type = kubeairunwayv1alpha1.EngineTypeLlamaCpp
 	md.Spec.Image = "my-image:latest"
-	md.Spec.Resources = &kubeairunwayv1alpha1.ResourceSpec{
+	md.Spec.Scaling = &kubeairunwayv1alpha1.ScalingSpec{
 		Memory: "16Gi",
 		CPU:    "4",
 	}
@@ -389,13 +389,13 @@ func TestBuildResourceRequests(t *testing.T) {
 	}
 
 	// Empty spec
-	result = tr.buildResourceRequests(&kubeairunwayv1alpha1.ResourceSpec{})
+	result = tr.buildResourceRequests(&kubeairunwayv1alpha1.ScalingSpec{})
 	if result != nil {
 		t.Errorf("expected nil for empty spec, got %v", result)
 	}
 
 	// Only memory
-	result = tr.buildResourceRequests(&kubeairunwayv1alpha1.ResourceSpec{Memory: "8Gi"})
+	result = tr.buildResourceRequests(&kubeairunwayv1alpha1.ScalingSpec{Memory: "8Gi"})
 	if result == nil {
 		t.Fatal("expected non-nil result")
 	}
@@ -405,7 +405,7 @@ func TestBuildResourceRequests(t *testing.T) {
 	}
 
 	// Both
-	result = tr.buildResourceRequests(&kubeairunwayv1alpha1.ResourceSpec{Memory: "8Gi", CPU: "2"})
+	result = tr.buildResourceRequests(&kubeairunwayv1alpha1.ScalingSpec{Memory: "8Gi", CPU: "2"})
 	requests, _ = result["requests"].(map[string]interface{})
 	if requests["cpu"] != "2" {
 		t.Errorf("expected cpu 2, got %v", requests["cpu"])
@@ -646,7 +646,7 @@ func TestTransformWithNilResources(t *testing.T) {
 	md := newTestMD("test-model", "default")
 	md.Spec.Engine.Type = kubeairunwayv1alpha1.EngineTypeLlamaCpp
 	md.Spec.Image = "my-image:latest"
-	md.Spec.Resources = nil
+	md.Spec.Scaling = nil
 
 	resources, err := tr.Transform(context.Background(), md)
 	if err != nil {
@@ -737,7 +737,7 @@ func TestTransformOverrideCanSetRootFields(t *testing.T) {
 func TestBuildResourceRequestsGPUOnly(t *testing.T) {
 	tr := NewTransformer()
 	// GPU-only spec — KAITO buildResourceRequests doesn't handle GPU
-	result := tr.buildResourceRequests(&kubeairunwayv1alpha1.ResourceSpec{
+	result := tr.buildResourceRequests(&kubeairunwayv1alpha1.ScalingSpec{
 		GPU: &kubeairunwayv1alpha1.GPUSpec{Count: 4},
 	})
 	if result != nil {

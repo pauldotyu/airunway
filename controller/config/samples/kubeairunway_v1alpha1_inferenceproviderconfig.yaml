@@ -16,7 +16,7 @@ spec:
     cpuSupport: true
     gpuSupport: true
   selectionRules:
-    - condition: "!has(spec.resources) || !has(spec.resources.gpu) || spec.resources.gpu.count == 0"
+    - condition: "!has(spec.scaling) || !has(spec.scaling.gpu) || spec.scaling.gpu.count == 0"
       priority: 100
     - condition: "spec.engine.type == 'llamacpp'"
       priority: 100
@@ -42,7 +42,7 @@ spec:
     cpuSupport: false
     gpuSupport: true
   selectionRules:
-    - condition: "has(spec.resources) && has(spec.resources.gpu) && spec.resources.gpu.count > 0"
+    - condition: "has(spec.scaling) && has(spec.scaling.gpu) && spec.scaling.gpu.count > 0"
       priority: 50
     - condition: "spec.engine.type == 'sglang' || spec.engine.type == 'trtllm'"
       priority: 100

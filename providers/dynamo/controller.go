@@ -196,7 +196,7 @@ func (r *DynamoProviderReconciler) validateCompatibility(md *kubeairunwayv1alpha
 
 	// Dynamo requires GPU
 	hasGPU := false
-	if md.Spec.Resources != nil && md.Spec.Resources.GPU != nil && md.Spec.Resources.GPU.Count > 0 {
+	if md.Spec.Scaling != nil && md.Spec.Scaling.GPU != nil && md.Spec.Scaling.GPU.Count > 0 {
 		hasGPU = true
 	}
 	if md.Spec.Serving != nil && md.Spec.Serving.Mode == kubeairunwayv1alpha1.ServingModeDisaggregated {
@@ -209,7 +209,7 @@ func (r *DynamoProviderReconciler) validateCompatibility(md *kubeairunwayv1alpha
 	}
 
 	if !hasGPU {
-		return fmt.Errorf("Dynamo requires GPU (set resources.gpu.count > 0)")
+		return fmt.Errorf("Dynamo requires GPU (set scaling.gpu.count > 0)")
 	}
 
 	return nil

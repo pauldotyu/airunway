@@ -57,40 +57,37 @@ func (d *ModelDeploymentCustomDefaulter) Default(_ context.Context, obj *kubeair
 		spec.Model.Source = kubeairunwayv1alpha1.ModelSourceHuggingFace
 	}
 
-	// Default serving mode to aggregated
+	// Infer serving mode: disaggregated if prefill/decode are present, otherwise aggregated
+	inferredMode := kubeairunwayv1alpha1.ServingModeAggregated
+	if spec.Scaling != nil && spec.Scaling.Prefill != nil && spec.Scaling.Decode != nil {
+		inferredMode = kubeairunwayv1alpha1.ServingModeDisaggregated
+	}
 	if spec.Serving == nil {
 		spec.Serving = &kubeairunwayv1alpha1.ServingSpec{
-			Mode: kubeairunwayv1alpha1.ServingModeAggregated,
+			Mode: inferredMode,
 		}
 	} else if spec.Serving.Mode == "" {
-		spec.Serving.Mode = kubeairunwayv1alpha1.ServingModeAggregated
+		spec.Serving.Mode = inferredMode
 	}
 
-	// Default scaling replicas to 1 for aggregated mode
+	// Default scaling and GPU for aggregated mode
 	if spec.Serving.Mode == kubeairunwayv1alpha1.ServingModeAggregated {
 		if spec.Scaling == nil {
 			spec.Scaling = &kubeairunwayv1alpha1.ScalingSpec{
 				Replicas: 1,
 			}
-		} else if spec.Scaling.Replicas == 0 {
-			// Allow 0 for scale-to-zero, but default to 1 if not explicitly set
-			// This is handled by the kubebuilder default tag
 		}
-	}
-
-	// Default GPU to 1 in aggregated mode when resources are unspecified
-	if spec.Serving.Mode == kubeairunwayv1alpha1.ServingModeAggregated && spec.Resources == nil {
-		spec.Resources = &kubeairunwayv1alpha1.ResourceSpec{
-			GPU: &kubeairunwayv1alpha1.GPUSpec{
+		if spec.Scaling.GPU == nil {
+			spec.Scaling.GPU = &kubeairunwayv1alpha1.GPUSpec{
 				Count: 1,
 				Type:  "nvidia.com/gpu",
-			},
+			}
 		}
 	}
 
 	// Default GPU type if GPU is specified but type is empty
-	if spec.Resources != nil && spec.Resources.GPU != nil && spec.Resources.GPU.Type == "" {
-		spec.Resources.GPU.Type = "nvidia.com/gpu"
+	if spec.Scaling != nil && spec.Scaling.GPU != nil && spec.Scaling.GPU.Type == "" {
+		spec.Scaling.GPU.Type = "nvidia.com/gpu"
 	}
 
 	// Default GPU type for disaggregated mode components
@@ -184,8 +181,8 @@ func (v *ModelDeploymentCustomValidator) validateSpec(obj *kubeairunwayv1alpha1.
 
 	// Validate GPU requirements for certain engines (only when engine is specified)
 	gpuCount := int32(0)
-	if spec.Resources != nil && spec.Resources.GPU != nil {
-		gpuCount = spec.Resources.GPU.Count
+	if spec.Scaling != nil && spec.Scaling.GPU != nil {
+		gpuCount = spec.Scaling.GPU.Count
 	}
 
 	servingMode := kubeairunwayv1alpha1.ServingModeAggregated
@@ -198,21 +195,21 @@ func (v *ModelDeploymentCustomValidator) validateSpec(obj *kubeairunwayv1alpha1.
 		// These engines require GPU (unless in disaggregated mode with component-level GPUs)
 		if servingMode == kubeairunwayv1alpha1.ServingModeAggregated && gpuCount == 0 {
 			allErrs = append(allErrs, field.Invalid(
-				specPath.Child("resources", "gpu", "count"),
+				specPath.Child("scaling", "gpu", "count"),
 				gpuCount,
-				fmt.Sprintf("%s engine requires GPU (set resources.gpu.count > 0)", spec.Engine.Type),
+				fmt.Sprintf("%s engine requires GPU (set scaling.gpu.count > 0)", spec.Engine.Type),
 			))
 		}
 	}
 
 	// Validate disaggregated mode configuration
 	if servingMode == kubeairunwayv1alpha1.ServingModeDisaggregated {
-		// Cannot specify resources.gpu in disaggregated mode
-		if spec.Resources != nil && spec.Resources.GPU != nil && spec.Resources.GPU.Count > 0 {
+		// Cannot specify top-level scaling.gpu in disaggregated mode
+		if spec.Scaling != nil && spec.Scaling.GPU != nil && spec.Scaling.GPU.Count > 0 {
 			allErrs = append(allErrs, field.Invalid(
-				specPath.Child("resources", "gpu"),
-				spec.Resources.GPU,
-				"cannot specify both resources.gpu and scaling.prefill/decode in disaggregated mode",
+				specPath.Child("scaling", "gpu"),
+				spec.Scaling.GPU,
+				"cannot specify both scaling.gpu and scaling.prefill/decode in disaggregated mode",
 			))
 		}
 

@@ -335,37 +335,12 @@ spec:
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
                 type: object
-              resources:
-                description: |-
-                  resources defines the resource requirements
-                  Not allowed in disaggregated mode (use scaling.prefill/decode instead)
+              scaling:
+                description: scaling defines the scaling and resource configuration
                 properties:
                   cpu:
                     description: cpu is the CPU requirement (e.g., "4")
                     type: string
-                  gpu:
-                    description: gpu defines GPU requirements
-                    properties:
-                      count:
-                        default: 0
-                        description: count is the number of GPUs
-                        format: int32
-                        minimum: 0
-                        type: integer
-                      type:
-                        default: nvidia.com/gpu
-                        description: |-
-                          type is the GPU resource name (defaults to nvidia.com/gpu)
-                          Override for AMD/Intel GPUs
-                        type: string
-                    type: object
-                  memory:
-                    description: memory is the memory requirement (e.g., "32Gi")
-                    type: string
-                type: object
-              scaling:
-                description: scaling defines the scaling configuration
-                properties:
                   decode:
                     description: decode defines decode worker configuration for disaggregated
                       mode
@@ -400,6 +375,25 @@ spec:
                         minimum: 0
                         type: integer
                     type: object
+                  gpu:
+                    description: gpu defines GPU requirements for aggregated mode
+                    properties:
+                      count:
+                        default: 0
+                        description: count is the number of GPUs
+                        format: int32
+                        minimum: 0
+                        type: integer
+                      type:
+                        default: nvidia.com/gpu
+                        description: |-
+                          type is the GPU resource name (defaults to nvidia.com/gpu)
+                          Override for AMD/Intel GPUs
+                        type: string
+                    type: object
+                  memory:
+                    description: memory is the memory requirement (e.g., "32Gi")
+                    type: string
                   prefill:
                     description: prefill defines prefill worker configuration for
                       disaggregated mode

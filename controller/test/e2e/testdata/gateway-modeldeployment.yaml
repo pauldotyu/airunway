@@ -5,7 +5,7 @@ metadata:
 spec:
   model:
     source: custom
-  resources:
+  scaling:
     cpu: "4"
   image: "ghcr.io/kaito-project/aikit/llama3.2:1b"
   gateway:

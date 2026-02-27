@@ -73,7 +73,7 @@ func GetProviderConfigSpec() kubeairunwayv1alpha1.InferenceProviderConfigSpec {
 		SelectionRules: []kubeairunwayv1alpha1.SelectionRule{
 			{
 				// Prefer for multi-GPU vLLM workloads
-				Condition: "has(spec.resources.gpu) && spec.resources.gpu.count > 1 && spec.engine.type == 'vllm'",
+				Condition: "has(spec.scaling.gpu) && spec.scaling.gpu.count > 1 && spec.engine.type == 'vllm'",
 				Priority:  80,
 			},
 		},

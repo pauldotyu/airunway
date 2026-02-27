@@ -199,7 +199,7 @@ func (t *Transformer) buildLlamaCppTemplate(md *kubeairunwayv1alpha1.ModelDeploy
 	}
 
 	// Add resource requests
-	resources := t.buildResourceRequests(md.Spec.Resources)
+	resources := t.buildResourceRequests(md.Spec.Scaling)
 	if len(resources) > 0 {
 		container["resources"] = resources
 	}
@@ -224,8 +224,8 @@ func (t *Transformer) buildLlamaCppTemplate(md *kubeairunwayv1alpha1.ModelDeploy
 	return template, nil
 }
 
-// buildResourceRequests creates resource requests from ResourceSpec
-func (t *Transformer) buildResourceRequests(spec *kubeairunwayv1alpha1.ResourceSpec) map[string]interface{} {
+// buildResourceRequests creates resource requests from ScalingSpec
+func (t *Transformer) buildResourceRequests(spec *kubeairunwayv1alpha1.ScalingSpec) map[string]interface{} {
 	if spec == nil {
 		return nil
 	}

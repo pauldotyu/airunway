@@ -229,8 +229,8 @@ func (r *ModelDeploymentReconciler) validateSpec(ctx context.Context, md *kubeai
 
 	// Validate GPU requirements for certain engines
 	gpuCount := int32(0)
-	if spec.Resources != nil && spec.Resources.GPU != nil {
-		gpuCount = spec.Resources.GPU.Count
+	if spec.Scaling != nil && spec.Scaling.GPU != nil {
+		gpuCount = spec.Scaling.GPU.Count
 	}
 
 	switch engineType {
@@ -242,15 +242,15 @@ func (r *ModelDeploymentReconciler) validateSpec(ctx context.Context, md *kubeai
 		}
 
 		if servingMode == kubeairunwayv1alpha1.ServingModeAggregated && gpuCount == 0 {
-			return fmt.Errorf("%s engine requires GPU (set resources.gpu.count > 0)", engineType)
+			return fmt.Errorf("%s engine requires GPU (set scaling.gpu.count > 0)", engineType)
 		}
 	}
 
 	// Validate disaggregated mode configuration
 	if spec.Serving != nil && spec.Serving.Mode == kubeairunwayv1alpha1.ServingModeDisaggregated {
-		// Cannot specify resources.gpu in disaggregated mode
-		if spec.Resources != nil && spec.Resources.GPU != nil && spec.Resources.GPU.Count > 0 {
-			return fmt.Errorf("cannot specify both resources.gpu and scaling.prefill/decode in disaggregated mode")
+		// Cannot specify top-level scaling.gpu in disaggregated mode
+		if spec.Scaling != nil && spec.Scaling.GPU != nil && spec.Scaling.GPU.Count > 0 {
+			return fmt.Errorf("cannot specify both scaling.gpu and scaling.prefill/decode in disaggregated mode")
 		}
 
 		// Must specify prefill and decode
@@ -311,7 +311,7 @@ func (r *ModelDeploymentReconciler) selectEngine(ctx context.Context, md *kubeai
 
 	// Determine deployment characteristics
 	hasGPU := false
-	if md.Spec.Resources != nil && md.Spec.Resources.GPU != nil && md.Spec.Resources.GPU.Count > 0 {
+	if md.Spec.Scaling != nil && md.Spec.Scaling.GPU != nil && md.Spec.Scaling.GPU.Count > 0 {
 		hasGPU = true
 	}
 	if md.Spec.Serving != nil && md.Spec.Serving.Mode == kubeairunwayv1alpha1.ServingModeDisaggregated {
@@ -460,7 +460,7 @@ func (r *ModelDeploymentReconciler) runSelectionAlgorithm(md *kubeairunwayv1alph
 
 	// Determine GPU requirements
 	hasGPU := false
-	if spec.Resources != nil && spec.Resources.GPU != nil && spec.Resources.GPU.Count > 0 {
+	if spec.Scaling != nil && spec.Scaling.GPU != nil && spec.Scaling.GPU.Count > 0 {
 		hasGPU = true
 	}
 	if spec.Serving != nil && spec.Serving.Mode == kubeairunwayv1alpha1.ServingModeDisaggregated {

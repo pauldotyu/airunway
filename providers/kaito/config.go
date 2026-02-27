@@ -73,7 +73,7 @@ func GetProviderConfigSpec() kubeairunwayv1alpha1.InferenceProviderConfigSpec {
 		SelectionRules: []kubeairunwayv1alpha1.SelectionRule{
 			{
 				// Best for CPU workloads
-				Condition: "!has(spec.resources.gpu) || spec.resources.gpu.count == 0",
+				Condition: "!has(spec.scaling.gpu) || spec.scaling.gpu.count == 0",
 				Priority:  100,
 			},
 			{

@@ -48,16 +48,37 @@ var _ = Describe("ModelDeployment Webhook", func() {
 	})
 
 	Context("When creating ModelDeployment under Defaulting Webhook", func() {
-		// TODO (user): Add logic for defaulting webhooks
-		// Example:
-		// It("Should apply defaults when a required field is empty", func() {
-		//     By("simulating a scenario where defaults should be applied")
-		//     obj.SomeFieldWithDefault = ""
-		//     By("calling the Default method to apply defaults")
-		//     defaulter.Default(ctx, obj)
-		//     By("checking that the default values are set")
-		//     Expect(obj.SomeFieldWithDefault).To(Equal("default_value"))
-		// })
+		It("Should default serving mode to aggregated when no prefill/decode", func() {
+			obj.Spec.Model.ID = "test-model"
+			defaulter.Default(ctx, obj)
+			Expect(obj.Spec.Serving).NotTo(BeNil())
+			Expect(obj.Spec.Serving.Mode).To(Equal(kubeairunwayv1alpha1.ServingModeAggregated))
+		})
+
+		It("Should infer disaggregated mode when prefill and decode are present", func() {
+			obj.Spec.Model.ID = "test-model"
+			obj.Spec.Scaling = &kubeairunwayv1alpha1.ScalingSpec{
+				Prefill: &kubeairunwayv1alpha1.ComponentScalingSpec{
+					Replicas: 1,
+					GPU:      &kubeairunwayv1alpha1.GPUSpec{Count: 2, Type: "nvidia.com/gpu"},
+				},
+				Decode: &kubeairunwayv1alpha1.ComponentScalingSpec{
+					Replicas: 2,
+					GPU:      &kubeairunwayv1alpha1.GPUSpec{Count: 1, Type: "nvidia.com/gpu"},
+				},
+			}
+			defaulter.Default(ctx, obj)
+			Expect(obj.Spec.Serving.Mode).To(Equal(kubeairunwayv1alpha1.ServingModeDisaggregated))
+		})
+
+		It("Should not override explicit serving mode", func() {
+			obj.Spec.Model.ID = "test-model"
+			obj.Spec.Serving = &kubeairunwayv1alpha1.ServingSpec{
+				Mode: kubeairunwayv1alpha1.ServingModeAggregated,
+			}
+			defaulter.Default(ctx, obj)
+			Expect(obj.Spec.Serving.Mode).To(Equal(kubeairunwayv1alpha1.ServingModeAggregated))
+		})
 	})
 
 	Context("When creating or updating ModelDeployment under Validating Webhook", func() {

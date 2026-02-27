@@ -90,7 +90,7 @@ func GetProviderConfigSpec() kubeairunwayv1alpha1.InferenceProviderConfigSpec {
 			},
 			{
 				// Default selection for GPU workloads with vLLM
-				Condition: "has(spec.resources.gpu) && spec.resources.gpu.count > 0 && spec.engine.type == 'vllm'",
+				Condition: "has(spec.scaling.gpu) && spec.scaling.gpu.count > 0 && spec.engine.type == 'vllm'",
 				Priority:  50,
 			},
 		},

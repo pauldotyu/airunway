@@ -145,21 +145,6 @@ type GPUSpec struct {
 	Type string `json:"type,omitempty"`
 }
 
-// ResourceSpec defines resource requirements
-type ResourceSpec struct {
-	// gpu defines GPU requirements
-	// +optional
-	GPU *GPUSpec `json:"gpu,omitempty"`
-
-	// memory is the memory requirement (e.g., "32Gi")
-	// +optional
-	Memory string `json:"memory,omitempty"`
-
-	// cpu is the CPU requirement (e.g., "4")
-	// +optional
-	CPU string `json:"cpu,omitempty"`
-}
-
 // ComponentScalingSpec defines scaling for prefill/decode components
 type ComponentScalingSpec struct {
 	// replicas is the number of replicas for this component
@@ -179,13 +164,25 @@ type ComponentScalingSpec struct {
 	Memory string `json:"memory,omitempty"`
 }
 
-// ScalingSpec defines the scaling configuration
+// ScalingSpec defines the scaling and resource configuration
 type ScalingSpec struct {
 	// replicas is the number of replicas for aggregated mode
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:default=1
 	// +optional
 	Replicas int32 `json:"replicas,omitempty"`
+
+	// gpu defines GPU requirements for aggregated mode
+	// +optional
+	GPU *GPUSpec `json:"gpu,omitempty"`
+
+	// memory is the memory requirement (e.g., "32Gi")
+	// +optional
+	Memory string `json:"memory,omitempty"`
+
+	// cpu is the CPU requirement (e.g., "4")
+	// +optional
+	CPU string `json:"cpu,omitempty"`
 
 	// prefill defines prefill worker configuration for disaggregated mode
 	// +optional
@@ -256,14 +253,9 @@ type ModelDeploymentSpec struct {
 	// +optional
 	Serving *ServingSpec `json:"serving,omitempty"`
 
-	// scaling defines the scaling configuration
+	// scaling defines the scaling and resource configuration
 	// +optional
 	Scaling *ScalingSpec `json:"scaling,omitempty"`
-
-	// resources defines the resource requirements
-	// Not allowed in disaggregated mode (use scaling.prefill/decode instead)
-	// +optional
-	Resources *ResourceSpec `json:"resources,omitempty"`
 
 	// image is a custom container image
 	// +optional

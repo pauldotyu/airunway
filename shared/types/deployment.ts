@@ -76,12 +76,6 @@ export interface GPUSpec {
   type?: string;
 }
 
-export interface ResourceSpec {
-  gpu?: GPUSpec;
-  memory?: string;
-  cpu?: string;
-}
-
 export interface ComponentScalingSpec {
   replicas: number;
   gpu?: GPUSpec;
@@ -89,6 +83,9 @@ export interface ComponentScalingSpec {
 
 export interface ScalingSpec {
   replicas?: number;
+  gpu?: GPUSpec;
+  memory?: string;
+  cpu?: string;
   minReplicas?: number;
   maxReplicas?: number;
   prefill?: ComponentScalingSpec;
@@ -119,7 +116,6 @@ export interface ModelDeploymentSpec {
   engine: EngineSpec;
   serving?: ServingSpec;
   scaling?: ScalingSpec;
-  resources?: ResourceSpec;
   image?: string;
   env?: Record<string, string>;
   podTemplate?: PodTemplateSpec;
@@ -270,13 +266,11 @@ export function toModelDeploymentSpec(config: DeploymentConfig): ModelDeployment
       replicas: config.replicas,
     };
     if (config.resources?.gpu) {
-      spec.resources = {
-        gpu: {
-          count: config.resources.gpu,
-          type: 'nvidia.com/gpu',
-        },
-        memory: config.resources.memory,
+      spec.scaling.gpu = {
+        count: config.resources.gpu,
+        type: 'nvidia.com/gpu',
       };
+      spec.scaling.memory = config.resources.memory;
     }
   } else if (config.mode === 'disaggregated') {
     spec.scaling = {

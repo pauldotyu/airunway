@@ -30,7 +30,7 @@ func newMDForController(name, ns string) *kubeairunwayv1alpha1.ModelDeployment {
 		Spec: kubeairunwayv1alpha1.ModelDeploymentSpec{
 			Model:     kubeairunwayv1alpha1.ModelSpec{ID: "test-model", Source: kubeairunwayv1alpha1.ModelSourceHuggingFace},
 			Engine:    kubeairunwayv1alpha1.EngineSpec{Type: kubeairunwayv1alpha1.EngineTypeVLLM},
-			Resources: &kubeairunwayv1alpha1.ResourceSpec{GPU: &kubeairunwayv1alpha1.GPUSpec{Count: 1}},
+			Scaling: &kubeairunwayv1alpha1.ScalingSpec{GPU: &kubeairunwayv1alpha1.GPUSpec{Count: 1}},
 		},
 		Status: kubeairunwayv1alpha1.ModelDeploymentStatus{
 			Provider: &kubeairunwayv1alpha1.ProviderStatus{Name: ProviderName},
@@ -57,7 +57,7 @@ func TestValidateCompatibility(t *testing.T) {
 			md: &kubeairunwayv1alpha1.ModelDeployment{
 				Spec: kubeairunwayv1alpha1.ModelDeploymentSpec{
 					Engine:    kubeairunwayv1alpha1.EngineSpec{Type: kubeairunwayv1alpha1.EngineTypeVLLM},
-					Resources: &kubeairunwayv1alpha1.ResourceSpec{GPU: &kubeairunwayv1alpha1.GPUSpec{Count: 1}},
+					Scaling: &kubeairunwayv1alpha1.ScalingSpec{GPU: &kubeairunwayv1alpha1.GPUSpec{Count: 1}},
 				},
 			},
 			wantErr: false,
@@ -67,7 +67,7 @@ func TestValidateCompatibility(t *testing.T) {
 			md: &kubeairunwayv1alpha1.ModelDeployment{
 				Spec: kubeairunwayv1alpha1.ModelDeploymentSpec{
 					Engine:    kubeairunwayv1alpha1.EngineSpec{Type: kubeairunwayv1alpha1.EngineTypeSGLang},
-					Resources: &kubeairunwayv1alpha1.ResourceSpec{GPU: &kubeairunwayv1alpha1.GPUSpec{Count: 1}},
+					Scaling: &kubeairunwayv1alpha1.ScalingSpec{GPU: &kubeairunwayv1alpha1.GPUSpec{Count: 1}},
 				},
 			},
 			wantErr: true,
@@ -78,7 +78,7 @@ func TestValidateCompatibility(t *testing.T) {
 			md: &kubeairunwayv1alpha1.ModelDeployment{
 				Spec: kubeairunwayv1alpha1.ModelDeploymentSpec{
 					Engine:    kubeairunwayv1alpha1.EngineSpec{Type: kubeairunwayv1alpha1.EngineTypeLlamaCpp},
-					Resources: &kubeairunwayv1alpha1.ResourceSpec{GPU: &kubeairunwayv1alpha1.GPUSpec{Count: 1}},
+					Scaling: &kubeairunwayv1alpha1.ScalingSpec{GPU: &kubeairunwayv1alpha1.GPUSpec{Count: 1}},
 				},
 			},
 			wantErr: true,
@@ -89,7 +89,7 @@ func TestValidateCompatibility(t *testing.T) {
 			md: &kubeairunwayv1alpha1.ModelDeployment{
 				Spec: kubeairunwayv1alpha1.ModelDeploymentSpec{
 					Engine:    kubeairunwayv1alpha1.EngineSpec{Type: kubeairunwayv1alpha1.EngineTypeTRTLLM},
-					Resources: &kubeairunwayv1alpha1.ResourceSpec{GPU: &kubeairunwayv1alpha1.GPUSpec{Count: 1}},
+					Scaling: &kubeairunwayv1alpha1.ScalingSpec{GPU: &kubeairunwayv1alpha1.GPUSpec{Count: 1}},
 				},
 			},
 			wantErr: true,
@@ -103,7 +103,7 @@ func TestValidateCompatibility(t *testing.T) {
 				},
 			},
 			wantErr: true,
-			errMsg:  "KubeRay requires GPU (set resources.gpu.count > 0)",
+			errMsg:  "KubeRay requires GPU (set scaling.gpu.count > 0)",
 		},
 		{
 			name: "disaggregated with prefill GPU is compatible",
