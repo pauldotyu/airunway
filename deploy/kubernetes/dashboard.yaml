@@ -51,12 +51,10 @@ rules:
     verbs: ["list", "watch"]
 
   # Namespaces (read + create)
-  # REVIEW: Uncomment "delete" to enable provider uninstall features
   - apiGroups: [""]
     resources:
       - namespaces
     verbs: ["get", "list", "watch", "create"]
-    # verbs: ["get", "list", "watch", "create", "delete"]
 
   # Apps API - Deployments, ReplicaSets
   - apiGroups: ["apps"]
@@ -79,12 +77,10 @@ rules:
     verbs: ["get", "list", "watch", "delete"]
 
   # CRD management (needed for provider detection)
-  # REVIEW: Uncomment "delete" to enable provider uninstall features
   - apiGroups: ["apiextensions.k8s.io"]
     resources:
       - customresourcedefinitions
     verbs: ["get", "list"]
-    # verbs: ["get", "list", "delete"]
 
   # NVIDIA Dynamo CRDs
   - apiGroups: ["nvidia.com"]
