@@ -65,8 +65,8 @@ jobs:
 
       - name: Check for manifest drift
         run: |
-          if ! diff -u deploy/kubernetes/controller.yaml /tmp/controller.yaml; then
-            echo "❌ deploy/kubernetes/controller.yaml is out of date."
+          if ! diff -u deploy/controller.yaml /tmp/controller.yaml; then
+            echo "❌ deploy/controller.yaml is out of date."
             echo "Run 'make generate-deploy-manifests' and commit the result."
             exit 1
           fi
