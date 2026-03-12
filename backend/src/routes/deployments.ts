@@ -10,6 +10,7 @@ import { handleK8sError } from '../lib/k8s-errors';
 import models from '../data/models.json';
 import logger from '../lib/logger';
 import type { DeploymentStatus, DeploymentConfig } from '@kubeairunway/shared';
+import { toModelDeploymentManifest } from '@kubeairunway/shared';
 import {
   namespaceSchema,
   resourceNameSchema,
@@ -36,6 +37,34 @@ const deploymentQuerySchema = z.object({
 const deploymentParamsSchema = z.object({
   name: resourceNameSchema,
 });
+
+const DNS_LABEL_REGEX = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
+
+const SYSTEM_PATHS = ['/dev', '/proc', '/sys', '/etc', '/var/run'];
+
+// Matches Kubernetes resource.Quantity: integer, decimal, or exponential with optional
+// binary (Ki, Mi, Gi, Ti, Pi, Ei) or decimal (n, u, m, k, M, G, T, P, E) suffix.
+const K8S_QUANTITY_REGEX = /^([+-]?[0-9.]+)(([eE][-+]?[0-9]+)|([KMGTPE]i?)|[numkMGTPE])?$/;
+
+const storageVolumeSchema = z.object({
+  name: z.string()
+    .min(1, 'Volume name is required')
+    .max(63, 'Volume name must be 63 characters or less')
+    .regex(DNS_LABEL_REGEX, 'Volume name must be a valid DNS label (lowercase alphanumeric with hyphens)'),
+  purpose: z.enum(['modelCache', 'compilationCache', 'custom']).optional().default('custom'),
+  mountPath: z.string().optional(),
+  readOnly: z.boolean().optional().default(false),
+  size: z.string()
+    .regex(K8S_QUANTITY_REGEX, 'Size must be a valid Kubernetes quantity (e.g. 100Gi, 500Mi, 1Ti)')
+    .optional(),
+  claimName: z.string().optional(),
+  storageClassName: z.string().optional(),
+  accessMode: z.enum(['ReadWriteOnce', 'ReadWriteMany', 'ReadOnlyMany', 'ReadWriteOncePod']).optional(),
+});
+
+const storageSchema = z.object({
+  volumes: z.array(storageVolumeSchema).max(8, 'Maximum 8 storage volumes allowed').optional(),
+}).optional();
 
 const createDeploymentSchema = z.object({
   name: resourceNameSchema,
@@ -68,6 +97,175 @@ const createDeploymentSchema = z.object({
   imageRef: z.string().optional(),
   computeType: z.enum(['cpu', 'gpu']).optional(),
   maxModelLen: z.number().int().positive().optional(),
+  storage: storageSchema,
+}).superRefine((data, ctx) => {
+  const volumes = data.storage?.volumes;
+  if (!volumes || volumes.length === 0) return;
+
+  // Rule 1: Unique volume names
+  const names = new Set<string>();
+  for (let i = 0; i < volumes.length; i++) {
+    if (names.has(volumes[i].name)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Duplicate volume name: "${volumes[i].name}"`,
+        path: ['storage', 'volumes', i, 'name'],
+      });
+    }
+    names.add(volumes[i].name);
+  }
+
+  // Rule 2: Unique mount paths
+  const mountPaths = new Set<string>();
+  for (let i = 0; i < volumes.length; i++) {
+    const mp = volumes[i].mountPath;
+    if (mp) {
+      if (mountPaths.has(mp)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Duplicate mount path: "${mp}"`,
+          path: ['storage', 'volumes', i, 'mountPath'],
+        });
+      }
+      mountPaths.add(mp);
+    }
+  }
+
+  // Rule 3: Unique claim names
+  const claimNames = new Set<string>();
+  for (let i = 0; i < volumes.length; i++) {
+    const cn = volumes[i].claimName;
+    if (cn) {
+      if (claimNames.has(cn)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Duplicate claim name: "${cn}"`,
+          path: ['storage', 'volumes', i, 'claimName'],
+        });
+      }
+      claimNames.add(cn);
+    }
+  }
+
+  // Count purpose occurrences for Rule 7
+  let modelCacheCount = 0;
+  let compilationCacheCount = 0;
+
+  for (let i = 0; i < volumes.length; i++) {
+    const vol = volumes[i];
+
+    // Rule 4: mountPath must be absolute when set
+    if (vol.mountPath && !vol.mountPath.startsWith('/')) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Mount path must be an absolute path (start with /)',
+        path: ['storage', 'volumes', i, 'mountPath'],
+      });
+    }
+
+    // Rule 5: mountPath required when purpose is custom
+    if (vol.purpose === 'custom' && !vol.mountPath) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Mount path is required for custom purpose volumes',
+        path: ['storage', 'volumes', i, 'mountPath'],
+      });
+    }
+
+    // Rule 6: Reject system paths
+    if (vol.mountPath) {
+      for (const sysPath of SYSTEM_PATHS) {
+        if (vol.mountPath === sysPath || vol.mountPath.startsWith(sysPath + '/')) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `Mount path "${vol.mountPath}" conflicts with system path "${sysPath}"`,
+            path: ['storage', 'volumes', i, 'mountPath'],
+          });
+          break;
+        }
+      }
+    }
+
+    // Rule 7: Count purposes
+    if (vol.purpose === 'modelCache') modelCacheCount++;
+    if (vol.purpose === 'compilationCache') compilationCacheCount++;
+
+    // Rule 8: When size is NOT set, claimName is required
+    if (!vol.size && !vol.claimName) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Claim name is required when size is not specified (existing PVC)',
+        path: ['storage', 'volumes', i, 'claimName'],
+      });
+    }
+
+    // Rule 9: When size IS set, readOnly must be false
+    if (vol.size && vol.readOnly) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Read-only is not allowed for controller-created PVCs (size is set)',
+        path: ['storage', 'volumes', i, 'readOnly'],
+      });
+    }
+
+    // Rule 10: When size IS set, claimName must be empty or match <deploymentName>-<volumeName>
+    if (vol.size && vol.claimName) {
+      const expectedClaimName = `${data.name}-${vol.name}`;
+      if (vol.claimName !== expectedClaimName) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `When size is set, claim name must be empty or match "${expectedClaimName}"`,
+          path: ['storage', 'volumes', i, 'claimName'],
+        });
+      }
+    }
+
+    // Rule 11: accessMode only valid when size is set
+    if (vol.accessMode && !vol.size) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Access mode is only valid when size is specified (new PVC)',
+        path: ['storage', 'volumes', i, 'accessMode'],
+      });
+    }
+
+    // Rule 12: storageClassName only valid when size is set
+    if (vol.storageClassName !== undefined && !vol.size) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Storage class name is only valid when size is specified (new PVC)',
+        path: ['storage', 'volumes', i, 'storageClassName'],
+      });
+    }
+
+    // Rule 13: Auto-generated claim name must be <=253 chars
+    if (vol.size && !vol.claimName) {
+      const autoClaimName = `${data.name}-${vol.name}`;
+      if (autoClaimName.length > 253) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Auto-generated claim name "${autoClaimName}" exceeds 253 character limit`,
+          path: ['storage', 'volumes', i, 'name'],
+        });
+      }
+    }
+  }
+
+  // Rule 7: Max 1 of each singleton purpose
+  if (modelCacheCount > 1) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Only one volume with purpose "modelCache" is allowed',
+      path: ['storage', 'volumes'],
+    });
+  }
+  if (compilationCacheCount > 1) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Only one volume with purpose "compilationCache" is allowed',
+      path: ['storage', 'volumes'],
+    });
+  }
 });
 
 const deployments = new Hono()
@@ -165,6 +363,55 @@ const deployments = new Hono()
       },
       201
     );
+  })
+  .post('/preview', zValidator('json', createDeploymentSchema), async (c) => {
+    const body = c.req.valid('json');
+    const config: DeploymentConfig = {
+      ...body,
+      namespace: body.namespace || (await configService.getDefaultNamespace()),
+    };
+
+    // Apply storage defaults that the mutating webhook would add,
+    // so the preview manifest matches what Kubernetes will persist.
+    if (config.storage?.volumes) {
+      config.storage = {
+        volumes: config.storage.volumes.map((vol) => {
+          const defaulted = { ...vol };
+          // Default purpose
+          if (!defaulted.purpose) {
+            defaulted.purpose = 'custom';
+          }
+          // Default mountPath based on purpose
+          if (!defaulted.mountPath) {
+            if (defaulted.purpose === 'modelCache') defaulted.mountPath = '/model-cache';
+            if (defaulted.purpose === 'compilationCache') defaulted.mountPath = '/compilation-cache';
+          }
+          // When size is set (controller-created PVC mode):
+          if (defaulted.size) {
+            // Default claimName to <deploymentName>-<volumeName>
+            if (!defaulted.claimName) {
+              defaulted.claimName = `${config.name}-${defaulted.name}`;
+            }
+            // Default accessMode to ReadWriteMany
+            if (!defaulted.accessMode) {
+              defaulted.accessMode = 'ReadWriteMany';
+            }
+          }
+          return defaulted;
+        }),
+      };
+    }
+
+    const manifest = toModelDeploymentManifest(config);
+    return c.json({
+      resources: [{
+        kind: 'ModelDeployment',
+        apiVersion: 'kubeairunway.ai/v1alpha1',
+        name: config.name,
+        manifest: manifest as unknown as Record<string, unknown>,
+      }],
+      primaryResource: { kind: 'ModelDeployment', apiVersion: 'kubeairunway.ai/v1alpha1' },
+    });
   })
   .get(
     '/:name',
