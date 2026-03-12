@@ -1368,7 +1368,7 @@ export function DeploymentForm({ model, detailedCapacity, autoscaler, runtimes }
             <span className="text-sm font-normal text-muted-foreground">(optional)</span>
           </h3>
           <p className="text-xs text-muted-foreground mb-4">
-            Mount persistent volumes for model caching, compilation caching, or custom storage.
+            Attach persistent disks to cache models, store compilation artifacts, or add custom storage.
           </p>
           <StorageVolumesSection
             volumes={config.storage?.volumes || []}

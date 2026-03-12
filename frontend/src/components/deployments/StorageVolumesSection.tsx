@@ -24,6 +24,14 @@ const DEFAULT_MOUNT_PATHS: Partial<Record<VolumePurpose, string>> = {
   compilationCache: '/compilation-cache',
 }
 
+// User-friendly labels for access modes
+const ACCESS_MODE_LABELS: Record<PersistentVolumeAccessMode, { label: string; desc: string }> = {
+  ReadWriteOnce: { label: 'Single node read/write', desc: 'One node can read and write' },
+  ReadWriteMany: { label: 'Multi-node read/write', desc: 'Multiple nodes can read and write' },
+  ReadOnlyMany: { label: 'Multi-node read only', desc: 'Multiple nodes can read' },
+  ReadWriteOncePod: { label: 'Single pod read/write', desc: 'One pod can read and write' },
+}
+
 interface StorageVolumesSectionProps {
   volumes: StorageVolume[]
   onChange: (volumes: StorageVolume[]) => void
@@ -68,30 +76,30 @@ function isSystemPath(path: string): boolean {
 }
 
 function validateVolumeName(name: string, index: number, volumes: StorageVolume[]): string | null {
-  if (!name) return 'Volume name is required'
+  if (!name) return 'Name is required'
   if (name.length > 63) return 'Must be 63 characters or less'
-  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(name)) return 'Must be lowercase alphanumeric with hyphens'
+  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(name)) return 'Must be lowercase letters, numbers, and hyphens'
   const duplicate = volumes.findIndex((v, i) => i !== index && v.name === name)
-  if (duplicate >= 0) return 'Volume name must be unique'
+  if (duplicate >= 0) return 'Each volume must have a unique name'
   return null
 }
 
 function validateMountPath(mountPath: string | undefined, purpose: VolumePurpose | undefined, index: number, volumes: StorageVolume[]): string | null {
   if (!mountPath) {
-    if (purpose === 'custom') return 'Mount path is required for custom volumes'
+    if (purpose === 'custom') return 'Container path is required for custom volumes'
     return null
   }
   if (!mountPath.startsWith('/')) return 'Must be an absolute path (start with /)'
   if (isSystemPath(mountPath)) return `System path "${mountPath}" is not allowed`
   const duplicate = volumes.findIndex((v, i) => i !== index && v.mountPath === mountPath)
-  if (duplicate >= 0) return 'Mount path must be unique across volumes'
+  if (duplicate >= 0) return 'Each volume must use a unique container path'
   return null
 }
 
 export function StorageVolumesSection({ volumes, onChange, deploymentName }: StorageVolumesSectionProps) {
   // Track which volume cards have been interacted with for showing validation
   const [touched, setTouched] = useState<Record<number, Set<string>>>({})
-  // Explicitly track PVC source mode per volume index.
+  // Explicitly track storage source mode per volume index.
   // Derived-from-data approach breaks because empty-string claimName is falsy.
   const [sourceModes, setSourceModes] = useState<Record<number, 'new' | 'existing'>>({})
   const markTouched = (index: number, field: string) => {
@@ -151,7 +159,7 @@ export function StorageVolumesSection({ volumes, onChange, deploymentName }: Sto
 
   const handlePurposeChange = (index: number, purpose: VolumePurpose) => {
     const updates: Partial<StorageVolume> = { purpose }
-    // Pre-fill mount path for cache purposes, but only if empty or matches previous default
+    // Pre-fill container path for cache purposes, but only if empty or matches previous default
     const currentVolume = volumes[index]
     const previousDefault = currentVolume.purpose ? DEFAULT_MOUNT_PATHS[currentVolume.purpose] : undefined
     const newDefault = DEFAULT_MOUNT_PATHS[purpose]
@@ -184,7 +192,7 @@ export function StorageVolumesSection({ volumes, onChange, deploymentName }: Sto
           const nameError = isTouched(index, 'name') ? validateVolumeName(vol.name, index, volumes) : null
           const mountPathError = isTouched(index, 'mountPath') ? validateMountPath(vol.mountPath, vol.purpose, index, volumes) : null
           const sourceMode = getSourceMode(vol, index)
-          const isNewPvc = sourceMode === 'new'
+          const isNewStorage = sourceMode === 'new'
 
           return (
             <div
@@ -261,12 +269,15 @@ export function StorageVolumesSection({ volumes, onChange, deploymentName }: Sto
                 </div>
               </div>
 
-              {/* Row 2: Mount Path */}
+              {/* Row 2: Container Path */}
               <div className="space-y-1.5">
-                <Label htmlFor={`vol-mount-${index}`}>
-                  Mount Path
-                  {vol.purpose === 'custom' && <span className="text-destructive ml-1">*</span>}
-                </Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor={`vol-mount-${index}`}>
+                    Container Path
+                    {vol.purpose === 'custom' && <span className="text-destructive ml-1">*</span>}
+                  </Label>
+                  <InfoHint text="The directory path inside the container where this volume will be accessible" />
+                </div>
                 <Input
                   id={`vol-mount-${index}`}
                   value={vol.mountPath || ''}
@@ -289,14 +300,13 @@ export function StorageVolumesSection({ volumes, onChange, deploymentName }: Sto
 
               {/* Row 3: Storage Source Toggle */}
               <div className="space-y-3">
-                <Label>Storage Source</Label>
+                <Label>Disk Source</Label>
                 <RadioGroup
                   value={sourceMode}
                   onValueChange={(value) => {
                     const mode = value as 'new' | 'existing'
                     setSourceModes(prev => ({ ...prev, [index]: mode }))
                     if (mode === 'new') {
-                      // Switching to "Create New PVC" - clear claimName, set a default size
                       updateVolume(index, {
                         size: vol.size || '100Gi',
                         claimName: undefined,
@@ -304,7 +314,6 @@ export function StorageVolumesSection({ volumes, onChange, deploymentName }: Sto
                         accessMode: vol.accessMode || 'ReadWriteMany',
                       })
                     } else {
-                      // Switching to "Use Existing PVC" - clear size/storageClassName/accessMode
                       updateVolume(index, {
                         size: undefined,
                         storageClassName: undefined,
@@ -318,23 +327,23 @@ export function StorageVolumesSection({ volumes, onChange, deploymentName }: Sto
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="new" id={`vol-source-new-${index}`} />
                     <Label htmlFor={`vol-source-new-${index}`} className="font-normal cursor-pointer">
-                      Create New PVC
+                      Create new disk
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="existing" id={`vol-source-existing-${index}`} />
                     <Label htmlFor={`vol-source-existing-${index}`} className="font-normal cursor-pointer">
-                      Use Existing PVC
+                      Use existing disk
                     </Label>
                   </div>
                 </RadioGroup>
 
-                {/* New PVC fields */}
-                {isNewPvc && (
+                {/* New disk fields */}
+                {isNewStorage && (
                   <div className="space-y-3 pl-4 border-l-2 border-white/5">
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-1.5">
-                        <Label htmlFor={`vol-size-${index}`}>Size</Label>
+                        <Label htmlFor={`vol-size-${index}`}>Disk Size</Label>
                         <Input
                           id={`vol-size-${index}`}
                           value={vol.size || ''}
@@ -342,7 +351,7 @@ export function StorageVolumesSection({ volumes, onChange, deploymentName }: Sto
                             const newSize = e.target.value || undefined
                             updateVolume(index, { size: newSize })
                             // If the user clears size entirely, switch to "existing" mode
-                            // so the claimName field becomes visible and the form stays valid.
+                            // so the disk name field becomes visible and the form stays valid.
                             if (!newSize) {
                               setSourceModes(prev => ({ ...prev, [index]: 'existing' }))
                             }
@@ -351,7 +360,10 @@ export function StorageVolumesSection({ volumes, onChange, deploymentName }: Sto
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor={`vol-access-${index}`}>Access Mode</Label>
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor={`vol-access-${index}`}>Sharing</Label>
+                          <InfoHint text="Controls how many nodes or pods can read/write to this disk simultaneously" />
+                        </div>
                         <Select
                           value={vol.accessMode || 'ReadWriteMany'}
                           onValueChange={(value) => updateVolume(index, { accessMode: value as PersistentVolumeAccessMode })}
@@ -360,16 +372,17 @@ export function StorageVolumesSection({ volumes, onChange, deploymentName }: Sto
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="ReadWriteOnce">ReadWriteOnce</SelectItem>
-                            <SelectItem value="ReadWriteMany">ReadWriteMany</SelectItem>
-                            <SelectItem value="ReadOnlyMany">ReadOnlyMany</SelectItem>
-                            <SelectItem value="ReadWriteOncePod">ReadWriteOncePod</SelectItem>
+                            {(Object.entries(ACCESS_MODE_LABELS) as [PersistentVolumeAccessMode, { label: string; desc: string }][]).map(([mode, { label }]) => (
+                              <SelectItem key={mode} value={mode}>
+                                {label}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
                     </div>
 
-                    {/* Storage Class - 3-state handling */}
+                    {/* Storage type */}
                     <StorageClassField
                       index={index}
                       storageClassName={vol.storageClassName}
@@ -378,13 +391,16 @@ export function StorageVolumesSection({ volumes, onChange, deploymentName }: Sto
                   </div>
                 )}
 
-                {/* Existing PVC fields */}
-                {!isNewPvc && (
+                {/* Existing disk fields */}
+                {!isNewStorage && (
                   <div className="space-y-3 pl-4 border-l-2 border-white/5">
                     <div className="space-y-1.5">
-                      <Label htmlFor={`vol-claim-${index}`}>
-                        PVC Claim Name <span className="text-destructive">*</span>
-                      </Label>
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor={`vol-claim-${index}`}>
+                          Existing Disk Name <span className="text-destructive">*</span>
+                        </Label>
+                        <InfoHint text="The name of a pre-provisioned persistent volume claim in your cluster" />
+                      </div>
                       <Input
                         id={`vol-claim-${index}`}
                         value={vol.claimName || ''}
@@ -393,11 +409,11 @@ export function StorageVolumesSection({ volumes, onChange, deploymentName }: Sto
                           markTouched(index, 'claimName')
                         }}
                         onBlur={() => markTouched(index, 'claimName')}
-                        placeholder="my-existing-pvc"
+                        placeholder="my-shared-storage"
                         className={isTouched(index, 'claimName') && !vol.claimName ? 'border-destructive' : ''}
                       />
                       {isTouched(index, 'claimName') && !vol.claimName && (
-                        <p className="text-xs text-destructive">Claim name is required for existing PVCs</p>
+                        <p className="text-xs text-destructive">A disk name is required when using existing storage</p>
                       )}
                     </div>
                   </div>
@@ -408,21 +424,21 @@ export function StorageVolumesSection({ volumes, onChange, deploymentName }: Sto
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Label className="font-normal">Read Only</Label>
-                  {isNewPvc && (
-                    <InfoHint text="Controller-created PVCs require write access" />
+                  {isNewStorage && (
+                    <InfoHint text="Newly created disks require write access" />
                   )}
                 </div>
                 <Switch
                   checked={vol.readOnly || false}
                   onCheckedChange={(checked) => updateVolume(index, { readOnly: checked })}
-                  disabled={isNewPvc}
+                  disabled={isNewStorage}
                 />
               </div>
 
-              {/* Auto-generated claim name preview */}
-              {isNewPvc && deploymentName && vol.name && (
+              {/* Auto-generated disk name preview */}
+              {isNewStorage && deploymentName && vol.name && (
                 <p className="text-xs text-muted-foreground">
-                  PVC name: <code className="font-mono-code">{deploymentName}-{vol.name}</code>
+                  Disk will be named: <code className="font-mono-code">{deploymentName}-{vol.name}</code>
                 </p>
               )}
             </div>
@@ -449,7 +465,7 @@ export function StorageVolumesSection({ volumes, onChange, deploymentName }: Sto
   )
 }
 
-// Sub-component: 3-state storage class field
+// Sub-component: storage type field (3-state handling)
 function StorageClassField({
   index,
   storageClassName,
@@ -463,20 +479,20 @@ function StorageClassField({
   // - undefined → use cluster default (checkbox checked)
   // - '' → explicit empty string (disables dynamic provisioning)
   // - 'some-value' → named class
-  const useClusterDefault = storageClassName === undefined
+  const useDefault = storageClassName === undefined
 
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <Label htmlFor={`vol-sc-${index}`}>Storage Class</Label>
-        <InfoHint text="Cluster default: omits storageClassName (uses cluster's default StorageClass). Custom: specify a class name, or leave empty to disable dynamic provisioning." />
+        <Label htmlFor={`vol-sc-${index}`}>Storage Type</Label>
+        <InfoHint text="Controls which kind of disk is provisioned. Use the default for standard storage, or specify a type (e.g. premium-ssd, gp3) for specific performance characteristics." />
       </div>
 
       <div className="flex items-center gap-3">
         <label className="flex items-center gap-2 text-sm cursor-pointer">
           <input
             type="checkbox"
-            checked={useClusterDefault}
+            checked={useDefault}
             onChange={(e) => {
               if (e.target.checked) {
                 onChange(undefined)
@@ -486,16 +502,16 @@ function StorageClassField({
             }}
             className="rounded border-white/20"
           />
-          Use cluster default
+          Use default storage type
         </label>
       </div>
 
-      {!useClusterDefault && (
+      {!useDefault && (
         <Input
           id={`vol-sc-${index}`}
           value={storageClassName || ''}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="e.g. premium-ssd (leave empty to disable dynamic provisioning)"
+          placeholder="e.g. premium-ssd, gp3, standard"
         />
       )}
     </div>

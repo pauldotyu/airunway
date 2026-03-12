@@ -217,21 +217,24 @@ export function DeploymentDetailsPage() {
                   )}
                   {vol.accessMode && (
                     <Badge variant="outline" className="text-xs">
-                      {vol.accessMode}
+                      {vol.accessMode === 'ReadWriteOnce' ? 'Single node' :
+                       vol.accessMode === 'ReadWriteMany' ? 'Multi-node' :
+                       vol.accessMode === 'ReadOnlyMany' ? 'Multi-node read only' :
+                       'Single pod'}
                     </Badge>
                   )}
                 </div>
                 <div className="mt-2 text-sm text-muted-foreground space-y-1">
                   {vol.mountPath && (
-                    <p>Mount: <code className="font-mono-code">{vol.mountPath}</code></p>
+                    <p>Path: <code className="font-mono-code">{vol.mountPath}</code></p>
                   )}
                   {vol.size ? (
                     <p>
-                      New PVC &middot; {vol.size}
+                      New disk &middot; {vol.size}
                       {vol.storageClassName && ` &middot; ${vol.storageClassName}`}
                     </p>
                   ) : vol.claimName ? (
-                    <p>Existing PVC &middot; <code className="font-mono-code">{vol.claimName}</code></p>
+                    <p>Existing disk &middot; <code className="font-mono-code">{vol.claimName}</code></p>
                   ) : null}
                 </div>
               </div>
