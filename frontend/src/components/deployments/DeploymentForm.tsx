@@ -1368,7 +1368,7 @@ export function DeploymentForm({ model, detailedCapacity, autoscaler, runtimes }
             <span className="text-sm font-normal text-muted-foreground">(optional)</span>
           </h3>
           <p className="text-xs text-muted-foreground mb-4">
-            Attach persistent disks to cache models, store compilation artifacts, or add custom storage.
+            Add persistent disks to speed up deployments. A <strong>Model Cache</strong> disk automatically downloads and stores model weights so restarts and scale-ups skip the download. A <strong>Compilation Cache</strong> disk stores engine compilation artifacts to avoid recompilation.
           </p>
           <StorageVolumesSection
             volumes={config.storage?.volumes || []}

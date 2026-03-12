@@ -223,7 +223,9 @@ export function StorageVolumesSection({ volumes, onChange, deploymentName }: Sto
               {/* Row 1: Name + Purpose */}
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                  <Label htmlFor={`vol-name-${index}`}>Name</Label>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor={`vol-name-${index}`}>Name</Label>
+                  </div>
                   <Input
                     id={`vol-name-${index}`}
                     value={vol.name}
@@ -241,7 +243,10 @@ export function StorageVolumesSection({ volumes, onChange, deploymentName }: Sto
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor={`vol-purpose-${index}`}>Purpose</Label>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor={`vol-purpose-${index}`}>Purpose</Label>
+                    <InfoHint text="Model Cache: automatically downloads and stores model weights for faster restarts. Compilation Cache: stores engine compilation output to skip recompilation. Custom: general-purpose storage you manage." />
+                  </div>
                   <Select
                     value={vol.purpose || 'custom'}
                     onValueChange={(value) => handlePurposeChange(index, value as VolumePurpose)}
