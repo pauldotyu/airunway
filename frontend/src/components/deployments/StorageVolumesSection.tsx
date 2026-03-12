@@ -85,6 +85,8 @@ export function StorageVolumesSection({ volumes, onChange, deploymentName }: Sto
       name: generateVolumeName(volumes),
       purpose: 'custom',
       readOnly: false,
+      size: '100Gi',
+      accessMode: 'ReadWriteMany',
     }
     onChange([...volumes, newVolume])
   }
@@ -364,7 +366,9 @@ export function StorageVolumesSection({ volumes, onChange, deploymentName }: Sto
                   {isNewPvc && (
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                        <button type="button" className="inline-flex text-muted-foreground hover:text-foreground transition-colors">
+                          <Info className="h-3.5 w-3.5" />
+                        </button>
                       </TooltipTrigger>
                       <TooltipContent>
                         <p>Controller-created PVCs require write access</p>
@@ -432,7 +436,9 @@ function StorageClassField({
         <Label htmlFor={`vol-sc-${index}`}>Storage Class</Label>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Info className="h-3.5 w-3.5 text-muted-foreground" />
+            <button type="button" className="inline-flex text-muted-foreground hover:text-foreground transition-colors">
+              <Info className="h-3.5 w-3.5" />
+            </button>
           </TooltipTrigger>
           <TooltipContent className="max-w-xs">
             <p>
