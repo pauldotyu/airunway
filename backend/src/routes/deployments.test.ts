@@ -1,6 +1,7 @@
 import { describe, test, expect, afterEach } from 'bun:test';
 import app from '../hono-app';
 import { kubernetesService } from '../services/kubernetes';
+import { configService } from '../services/config';
 import { mockServiceMethod } from '../test/helpers';
 import {
   mockDeployment,
@@ -121,6 +122,54 @@ describe('Deployment Routes', () => {
 
       const res = await app.request('/api/deployments/test-deploy/logs?podName=wrong-pod');
       expect(res.status).toBe(400);
+    });
+  });
+
+  describe('POST /api/deployments', () => {
+    test('accepts deployment with providerOverrides', async () => {
+      restores.push(
+        mockServiceMethod(kubernetesService, 'createDeployment', async () => undefined),
+      );
+      restores.push(
+        mockServiceMethod(kubernetesService, 'getClusterGpuCapacity', async () => ({
+          totalGpus: 16,
+          allocatedGpus: 0,
+          availableGpus: 16,
+          maxContiguousAvailable: 8,
+          nodes: [],
+        })),
+      );
+      restores.push(
+        mockServiceMethod(configService, 'getDefaultNamespace', async () => 'default'),
+      );
+
+      const res = await app.request('/api/deployments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'test-multinode',
+          modelId: 'Qwen/Qwen2.5-72B',
+          engine: 'vllm',
+          provider: 'dynamo',
+          resources: { gpu: 1 },
+          providerOverrides: {
+            spec: {
+              services: {
+                VllmWorker: {
+                  multinode: { nodeCount: 2 }
+                }
+              }
+            }
+          },
+          engineArgs: {
+            'tensor-parallel-size': '1',
+          },
+        }),
+      });
+
+      expect(res.status).toBe(201);
+      const data = await res.json();
+      expect(data.name).toBe('test-multinode');
     });
   });
 });

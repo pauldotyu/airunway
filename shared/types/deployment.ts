@@ -47,6 +47,7 @@ export interface DeploymentConfig {
   computeType?: 'cpu' | 'gpu';
   maxModelLen?: number;
   kaitoResourceType?: KaitoResourceType;
+  providerOverrides?: Record<string, unknown>;
 }
 
 export interface ModelSpec {
@@ -262,7 +263,10 @@ export function toModelDeploymentSpec(config: DeploymentConfig): ModelDeployment
   };
 
   if (config.provider) {
-    spec.provider = { name: config.provider };
+    spec.provider = {
+      name: config.provider,
+      ...(config.providerOverrides && { overrides: config.providerOverrides }),
+    };
   }
 
   if (config.mode === 'aggregated') {

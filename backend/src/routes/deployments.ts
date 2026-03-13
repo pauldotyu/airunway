@@ -57,6 +57,7 @@ const createDeploymentSchema = z.object({
     memory: z.string().optional(),
   }).optional(),
   engineArgs: z.record(z.unknown()).optional(),
+  providerOverrides: z.record(z.unknown()).optional(),
   prefillReplicas: z.number().int().min(0).optional(),
   decodeReplicas: z.number().int().min(0).optional(),
   prefillGpus: z.number().int().min(0).optional(),
