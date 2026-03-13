@@ -861,6 +861,18 @@ func (r *ModelDeploymentReconciler) cleanupGatewayResources(ctx context.Context,
 
 	md.Status.Gateway = nil
 	r.setCondition(md, kubeairunwayv1alpha1.ConditionTypeGatewayReady, metav1.ConditionFalse, "GatewayDisabled", "Gateway resources cleaned up")
+
+	// Clear the httproute-created annotation so the controller will recreate the
+	// HTTPRoute when the deployment recovers to Running. Without this, a transient
+	// phase change (e.g. crash-loop) would permanently suppress HTTPRoute recreation.
+	if md.Annotations[kubeairunwayv1alpha1.HTTPRouteCreated] == "true" {
+		base := md.DeepCopy()
+		delete(md.Annotations, kubeairunwayv1alpha1.HTTPRouteCreated)
+		if err := r.Patch(ctx, md, client.MergeFrom(base)); err != nil {
+			logger.V(1).Info("Could not clear httproute-created annotation during cleanup", "error", err)
+		}
+	}
+
 	logger.Info("Gateway resources cleaned up", "name", md.Name)
 	return nil
 }
