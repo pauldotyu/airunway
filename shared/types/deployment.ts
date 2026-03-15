@@ -9,6 +9,25 @@ export type ServingMode = 'aggregated' | 'disaggregated';
 export type DeploymentPhase = 'Pending' | 'Deploying' | 'Running' | 'Failed' | 'Terminating';
 export type PodPhase = 'Pending' | 'Running' | 'Succeeded' | 'Failed' | 'Unknown';
 
+// Storage types (mirrors controller StorageSpec / StorageVolume)
+export type VolumePurpose = 'modelCache' | 'compilationCache' | 'custom';
+export type PersistentVolumeAccessMode = 'ReadWriteOnce' | 'ReadWriteMany' | 'ReadOnlyMany' | 'ReadWriteOncePod';
+
+export interface StorageVolume {
+  name: string;
+  claimName?: string;
+  mountPath?: string;
+  purpose?: VolumePurpose;
+  readOnly?: boolean;
+  size?: string;
+  storageClassName?: string;
+  accessMode?: PersistentVolumeAccessMode;
+}
+
+export interface StorageSpec {
+  volumes?: StorageVolume[];
+}
+
 // Legacy types for backward compatibility
 export type DeploymentMode = ServingMode;
 export type GgufRunMode = 'build' | 'direct';
@@ -48,12 +67,14 @@ export interface DeploymentConfig {
   maxModelLen?: number;
   kaitoResourceType?: KaitoResourceType;
   providerOverrides?: Record<string, unknown>;
+  storage?: StorageSpec;
 }
 
 export interface ModelSpec {
   id: string;
   servedName?: string;
   source?: ModelSource;
+  storage?: StorageSpec;
 }
 
 export interface ProviderSpec {
@@ -231,6 +252,7 @@ export interface DeploymentStatus {
   pods: PodStatus[];
   createdAt: string;
   frontendService?: string;
+  storage?: StorageSpec;
   prefillReplicas?: {
     desired: number;
     ready: number;
@@ -301,6 +323,13 @@ export function toModelDeploymentSpec(config: DeploymentConfig): ModelDeployment
     };
   }
 
+  // Add storage volumes if configured
+  if (config.storage?.volumes && config.storage.volumes.length > 0) {
+    spec.model.storage = {
+      volumes: config.storage.volumes,
+    };
+  }
+
   return spec;
 }
 
@@ -329,6 +358,7 @@ export function toDeploymentStatus(md: ModelDeployment, pods: PodStatus[] = []):
     prefillReplicas: status.prefillReplicas,
     decodeReplicas: status.decodeReplicas,
     gateway: status.gateway,
+    storage: spec.model.storage,
   };
 }
 

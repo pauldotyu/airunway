@@ -14,11 +14,12 @@ import { usePremadeModels } from '@/hooks/useAikit'
 import { useToast } from '@/hooks/useToast'
 import { generateDeploymentName, cn } from '@/lib/utils'
 import { type Model, type DetailedClusterCapacity, type AutoscalerDetectionResult, type RuntimeStatus, type PremadeModel, type AIConfiguratorResult, aikitApi, type Engine, type KaitoResourceType } from '@/lib/api'
-import { ChevronDown, AlertCircle, Rocket, CheckCircle2, Sparkles, AlertTriangle, Server, Cpu, Box, Loader2 } from 'lucide-react'
+import { ChevronDown, AlertCircle, Rocket, CheckCircle2, Sparkles, AlertTriangle, Server, Cpu, Box, Loader2, HardDrive } from 'lucide-react'
 import { CapacityWarning } from './CapacityWarning'
 import { AIConfiguratorPanel } from './AIConfiguratorPanel'
 import { ManifestViewer } from './ManifestViewer'
 import { CostEstimate } from './CostEstimate'
+import { StorageVolumesSection } from './StorageVolumesSection'
 import { calculateGpuRecommendation, calculateMultiNode, type GpuRecommendation, type MultiNodeRecommendation } from '@/lib/gpu-recommendations'
 
 // Reusable GPU per Replica field component
@@ -438,6 +439,8 @@ export function DeploymentForm({ model, detailedCapacity, autoscaler, runtimes }
       setAiConfigRecommendedBackend(null)
       setAiConfigRecommendedMode(null)
       setAiConfigRecommendedValues(null)
+      // Clear storage config (storage volumes are only for Dynamo)
+      setConfig(prev => ({ ...prev, storage: undefined }))
     }
   }
 
@@ -1528,6 +1531,30 @@ export function DeploymentForm({ model, detailedCapacity, autoscaler, runtimes }
           )}
         </div>
       </div>
+      )}
+
+      {/* Storage Volumes - only shown for Dynamo runtime */}
+      {selectedRuntime === 'dynamo' && (
+        <div className="glass-panel">
+          <h3 className="text-lg font-semibold flex items-center gap-2 mb-1">
+            <HardDrive className="h-5 w-5" />
+            Storage Volumes
+            <span className="text-sm font-normal text-muted-foreground">(optional)</span>
+          </h3>
+          <p className="text-xs text-muted-foreground mb-4">
+            Add persistent disks to speed up deployments. A <strong>Model Cache</strong> disk automatically downloads and stores model weights so restarts and scale-ups skip the download. A <strong>Compilation Cache</strong> disk stores engine compilation artifacts to avoid recompilation.
+          </p>
+          <StorageVolumesSection
+            volumes={config.storage?.volumes || []}
+            onChange={(volumes) => {
+              setConfig(prev => ({
+                ...prev,
+                storage: volumes.length > 0 ? { volumes } : undefined,
+              }))
+            }}
+            deploymentName={config.name}
+          />
+        </div>
       )}
 
       {/* Advanced Options - show for non-KAITO runtimes OR KAITO with vLLM models */}
