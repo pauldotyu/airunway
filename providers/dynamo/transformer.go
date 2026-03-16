@@ -35,6 +35,11 @@ const (
 	DynamoAPIVersion = "v1alpha1"
 	// DynamoGraphDeploymentKind is the kind for DynamoGraphDeployment
 	DynamoGraphDeploymentKind = "DynamoGraphDeployment"
+	// DynamoRuntimeVersion is the default upstream runtime tag used for Dynamo engines.
+	DynamoRuntimeVersion      = "1.0.1"
+	defaultVLLMRuntimeImage   = "nvcr.io/nvidia/ai-dynamo/vllm-runtime:" + DynamoRuntimeVersion
+	defaultSGLangRuntimeImage = "nvcr.io/nvidia/ai-dynamo/sglang-runtime:" + DynamoRuntimeVersion
+	defaultTRTLLMRuntimeImage = "nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:" + DynamoRuntimeVersion
 
 	// Default component settings
 	DefaultFrontendReplicas = 1
@@ -351,7 +356,7 @@ func (t *Transformer) buildPrefillWorker(md *airunwayv1alpha1.ModelDeployment, i
 		"requests": requests,
 	}
 
-	// Disaggregated workers use an explicit mode in Dynamo 1.0.0.
+	// Dynamo 1.0.x uses an explicit disaggregation mode for worker roles.
 	args, err := t.buildEngineArgs(md)
 	if err != nil {
 		return nil, err
@@ -412,7 +417,7 @@ func (t *Transformer) buildDecodeWorker(md *airunwayv1alpha1.ModelDeployment, im
 		"requests": requests,
 	}
 
-	// Disaggregated workers use an explicit mode in Dynamo 1.0.0.
+	// Dynamo 1.0.x uses an explicit disaggregation mode for worker roles.
 	args, err := t.buildEngineArgs(md)
 	if err != nil {
 		return nil, err
@@ -583,9 +588,9 @@ func toInterfaceSlice(ss []string) []interface{} {
 
 // defaultImages contains the default container images for each engine type
 var defaultImages = map[airunwayv1alpha1.EngineType]string{
-	airunwayv1alpha1.EngineTypeVLLM:   "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.0",
-	airunwayv1alpha1.EngineTypeSGLang: "nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.0.0",
-	airunwayv1alpha1.EngineTypeTRTLLM: "nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:1.0.0",
+	airunwayv1alpha1.EngineTypeVLLM:   defaultVLLMRuntimeImage,
+	airunwayv1alpha1.EngineTypeSGLang: defaultSGLangRuntimeImage,
+	airunwayv1alpha1.EngineTypeTRTLLM: defaultTRTLLMRuntimeImage,
 }
 
 // getImage returns the container image to use
@@ -601,7 +606,7 @@ func (t *Transformer) getImage(md *airunwayv1alpha1.ModelDeployment) string {
 	}
 
 	// Fallback to vLLM default
-	return "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.0"
+	return defaultVLLMRuntimeImage
 }
 
 // buildPVCs creates the pvcs list for DynamoGraphDeployment from StorageSpec volumes.

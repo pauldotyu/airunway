@@ -204,25 +204,25 @@ func TestGetImage(t *testing.T) {
 	// Default vLLM image
 	md.Spec.Image = ""
 	md.Spec.Engine.Type = airunwayv1alpha1.EngineTypeVLLM
-	if img := tr.getImage(md); img != "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.0" {
+	if img := tr.getImage(md); img != defaultVLLMRuntimeImage {
 		t.Errorf("expected default vllm image, got %s", img)
 	}
 
 	// Default SGLang image
 	md.Spec.Engine.Type = airunwayv1alpha1.EngineTypeSGLang
-	if img := tr.getImage(md); img != "nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.0.0" {
+	if img := tr.getImage(md); img != defaultSGLangRuntimeImage {
 		t.Errorf("expected default sglang image, got %s", img)
 	}
 
 	// Default TRT-LLM image
 	md.Spec.Engine.Type = airunwayv1alpha1.EngineTypeTRTLLM
-	if img := tr.getImage(md); img != "nvcr.io/nvidia/ai-dynamo/tensorrtllm-runtime:1.0.0" {
+	if img := tr.getImage(md); img != defaultTRTLLMRuntimeImage {
 		t.Errorf("expected default trtllm image, got %s", img)
 	}
 
 	// Unknown engine → fallback
 	md.Spec.Engine.Type = airunwayv1alpha1.EngineType("unknown")
-	if img := tr.getImage(md); img != "nvcr.io/nvidia/ai-dynamo/vllm-runtime:1.0.0" {
+	if img := tr.getImage(md); img != defaultVLLMRuntimeImage {
 		t.Errorf("expected fallback to vllm image, got %s", img)
 	}
 }

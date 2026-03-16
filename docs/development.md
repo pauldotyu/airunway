@@ -439,9 +439,9 @@ kubectl create secret generic hf-token-secret \
 ### Install NVIDIA Dynamo (via Helm)
 ```bash
 export NAMESPACE=dynamo-system
-export RELEASE_VERSION=1.0.0
+export RELEASE_VERSION=1.0.1
 
-# Dynamo v1.0.0 bundles its CRDs in the platform chart
+# Dynamo v1.0.1 bundles its CRDs in the platform chart
 helm upgrade --install dynamo-platform \
   https://helm.ngc.nvidia.com/nvidia/ai-dynamo/charts/dynamo-platform-${RELEASE_VERSION}.tgz \
   --namespace ${NAMESPACE} \
