@@ -320,6 +320,7 @@ func (t *Transformer) buildAggregatedWorker(md *airunwayv1alpha1.ModelDeployment
 
 	// Add storage configuration (PVC volume mounts and HF_HOME)
 	t.addStorageConfig(worker, md)
+	t.maybeInjectVLLMSideChannelHost(worker, md)
 
 	return worker, nil
 }
@@ -381,6 +382,7 @@ func (t *Transformer) buildPrefillWorker(md *airunwayv1alpha1.ModelDeployment, i
 
 	// Add storage configuration (PVC volume mounts and HF_HOME)
 	t.addStorageConfig(worker, md)
+	t.maybeInjectVLLMSideChannelHost(worker, md)
 
 	return worker, nil
 }
@@ -441,6 +443,7 @@ func (t *Transformer) buildDecodeWorker(md *airunwayv1alpha1.ModelDeployment, im
 
 	// Add storage configuration (PVC volume mounts and HF_HOME)
 	t.addStorageConfig(worker, md)
+	t.maybeInjectVLLMSideChannelHost(worker, md)
 
 	return worker, nil
 }
@@ -669,6 +672,15 @@ func hasEnvVar(md *airunwayv1alpha1.ModelDeployment, name string) bool {
 	return false
 }
 
+// maybeInjectVLLMSideChannelHost ensures each vLLM worker advertises its own pod IP.
+func (t *Transformer) maybeInjectVLLMSideChannelHost(service map[string]interface{}, md *airunwayv1alpha1.ModelDeployment) {
+	if md.ResolvedEngineType() != airunwayv1alpha1.EngineTypeVLLM {
+		return
+	}
+
+	t.injectEnvVarFromFieldRef(service, "VLLM_NIXL_SIDE_CHANNEL_HOST", "status.podIP")
+}
+
 // injectEnvVar adds an environment variable to the mainContainer's env list in extraPodSpec
 func (t *Transformer) injectEnvVar(service map[string]interface{}, name, value string) {
 	extraPodSpec, ok := service["extraPodSpec"].(map[string]interface{})
@@ -687,6 +699,32 @@ func (t *Transformer) injectEnvVar(service map[string]interface{}, name, value s
 	envList = append(envList, map[string]interface{}{
 		"name":  name,
 		"value": value,
+	})
+	mainContainer["env"] = envList
+}
+
+// injectEnvVarFromFieldRef adds an environment variable sourced from a pod field.
+func (t *Transformer) injectEnvVarFromFieldRef(service map[string]interface{}, name, fieldPath string) {
+	extraPodSpec, ok := service["extraPodSpec"].(map[string]interface{})
+	if !ok {
+		extraPodSpec = map[string]interface{}{}
+		service["extraPodSpec"] = extraPodSpec
+	}
+
+	mainContainer, ok := extraPodSpec["mainContainer"].(map[string]interface{})
+	if !ok {
+		mainContainer = map[string]interface{}{}
+		extraPodSpec["mainContainer"] = mainContainer
+	}
+
+	envList, _ := mainContainer["env"].([]interface{})
+	envList = append(envList, map[string]interface{}{
+		"name": name,
+		"valueFrom": map[string]interface{}{
+			"fieldRef": map[string]interface{}{
+				"fieldPath": fieldPath,
+			},
+		},
 	})
 	mainContainer["env"] = envList
 }

@@ -1101,6 +1101,84 @@ func TestTransformWithCustomImage(t *testing.T) {
 	}
 }
 
+func TestTransformVLLMWorkersInjectNixlSideChannelHost(t *testing.T) {
+	tr := NewTransformer()
+	md := newTestMD("test-model", "default")
+
+	resources, err := tr.Transform(context.Background(), md)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	dgd := resources[0]
+	spec, _, _ := unstructured.NestedMap(dgd.Object, "spec")
+	services, _ := spec["services"].(map[string]interface{})
+	worker, _ := services["VllmWorker"].(map[string]interface{})
+
+	assertFieldRefEnvVar(t, worker, "VLLM_NIXL_SIDE_CHANNEL_HOST", "status.podIP")
+}
+
+func TestTransformDisaggregatedVLLMWorkersInjectNixlSideChannelHost(t *testing.T) {
+	tr := NewTransformer()
+	md := newTestMD("test-model", "default")
+	md.Spec.Serving = &airunwayv1alpha1.ServingSpec{
+		Mode: airunwayv1alpha1.ServingModeDisaggregated,
+	}
+	md.Spec.Scaling = &airunwayv1alpha1.ScalingSpec{
+		Prefill: &airunwayv1alpha1.ComponentScalingSpec{
+			Replicas: 1,
+			GPU:      &airunwayv1alpha1.GPUSpec{Count: 1, Type: "nvidia.com/gpu"},
+		},
+		Decode: &airunwayv1alpha1.ComponentScalingSpec{
+			Replicas: 1,
+			GPU:      &airunwayv1alpha1.GPUSpec{Count: 1, Type: "nvidia.com/gpu"},
+		},
+	}
+
+	resources, err := tr.Transform(context.Background(), md)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	dgd := resources[0]
+	spec, _, _ := unstructured.NestedMap(dgd.Object, "spec")
+	services, _ := spec["services"].(map[string]interface{})
+
+	for name, svcName := range map[string]string{
+		"prefill": "VllmPrefillWorker",
+		"decode":  "VllmDecodeWorker",
+	} {
+		worker, _ := services[svcName].(map[string]interface{})
+		if worker == nil {
+			t.Fatalf("expected %s service", svcName)
+		}
+		assertFieldRefEnvVar(t, worker, "VLLM_NIXL_SIDE_CHANNEL_HOST", "status.podIP")
+		if testing.Verbose() {
+			t.Logf("verified %s worker env injection", name)
+		}
+	}
+}
+
+func TestTransformNonVLLMWorkersDoNotInjectNixlSideChannelHost(t *testing.T) {
+	tr := NewTransformer()
+	md := newTestMD("test-model", "default")
+	md.Spec.Engine.Type = airunwayv1alpha1.EngineTypeSGLang
+
+	resources, err := tr.Transform(context.Background(), md)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	dgd := resources[0]
+	spec, _, _ := unstructured.NestedMap(dgd.Object, "spec")
+	services, _ := spec["services"].(map[string]interface{})
+	worker, _ := services["VllmWorker"].(map[string]interface{})
+
+	if env := findEnvVar(worker, "VLLM_NIXL_SIDE_CHANNEL_HOST"); env != nil {
+		t.Fatalf("did not expect VLLM_NIXL_SIDE_CHANNEL_HOST for non-vLLM worker, got %v", env)
+	}
+}
+
 func TestBuildResourceLimitsWithAllFields(t *testing.T) {
 	tr := NewTransformer()
 	result := tr.buildResourceLimits(&airunwayv1alpha1.ResourceSpec{
@@ -1522,5 +1600,33 @@ func TestTransformWithReadOnlyVolume(t *testing.T) {
 	}
 	if mount["readOnly"] != true {
 		t.Errorf("expected readOnly=true, got %v", mount["readOnly"])
+	}
+}
+
+func findEnvVar(service map[string]interface{}, name string) map[string]interface{} {
+	eps, _ := service["extraPodSpec"].(map[string]interface{})
+	mc, _ := eps["mainContainer"].(map[string]interface{})
+	envList, _ := mc["env"].([]interface{})
+	for _, e := range envList {
+		envMap, _ := e.(map[string]interface{})
+		if envMap["name"] == name {
+			return envMap
+		}
+	}
+	return nil
+}
+
+func assertFieldRefEnvVar(t *testing.T, service map[string]interface{}, name, fieldPath string) {
+	t.Helper()
+
+	env := findEnvVar(service, name)
+	if env == nil {
+		t.Fatalf("expected env var %s to be present", name)
+	}
+
+	valueFrom, _ := env["valueFrom"].(map[string]interface{})
+	fieldRef, _ := valueFrom["fieldRef"].(map[string]interface{})
+	if fieldRef["fieldPath"] != fieldPath {
+		t.Fatalf("expected %s fieldPath %q, got %v", name, fieldPath, fieldRef["fieldPath"])
 	}
 }
