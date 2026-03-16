@@ -347,7 +347,7 @@ Get provider installation status.
   "installed": true,
   "crdFound": true,
   "operatorRunning": true,
-  "version": "dynamo-provider:v0.1.0",
+  "version": "dynamo-provider:v0.2.0",
   "message": "Dynamo is installed and running"
 }
 ```
@@ -361,7 +361,7 @@ Get manual installation commands for a provider.
   "commands": [
     "helm repo add nvidia-ai-dynamo https://helm.ngc.nvidia.com/nvidia/ai-dynamo",
     "helm repo update",
-    "helm install dynamo-platform https://helm.ngc.nvidia.com/nvidia/ai-dynamo/charts/dynamo-platform-1.0.0.tgz --namespace dynamo-system --create-namespace"
+    "helm install dynamo-platform https://helm.ngc.nvidia.com/nvidia/ai-dynamo/charts/dynamo-platform-1.0.0.tgz --namespace dynamo-system --create-namespace --set-json global.grove.install=true"
   ]
 }
 ```
@@ -817,7 +817,7 @@ Get installation and health status of all runtimes.
       "name": "Dynamo",
       "installed": true,
       "healthy": true,
-      "version": "dynamo-provider:v0.1.0",
+      "version": "dynamo-provider:v0.2.0",
       "message": "Provider ready"
     },
     {

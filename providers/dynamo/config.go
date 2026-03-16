@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"time"
 
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -35,7 +36,7 @@ const (
 	ProviderConfigName = "dynamo"
 
 	// ProviderVersion is the version of the AIRunway Dynamo provider controller.
-	ProviderVersion = "dynamo-provider:v0.1.0"
+	ProviderVersion = "dynamo-provider:v0.2.0"
 
 	// DynamoPlatformChartVersion is the upstream Dynamo platform chart version.
 	DynamoPlatformChartVersion = "1.0.0"
@@ -112,13 +113,16 @@ func GetProviderConfigSpec() airunwayv1alpha1.InferenceProviderConfigSpec {
 					Chart:           DynamoPlatformChartURL,
 					Namespace:       "dynamo-system",
 					CreateNamespace: true,
+					Values: map[string]apiextensionsv1.JSON{
+						"global.grove.install": {Raw: []byte("true")},
+					},
 				},
 			},
 			Steps: []airunwayv1alpha1.InstallationStep{
 				{
 					Title:       "Install Dynamo Platform",
-					Command:     "helm upgrade --install dynamo-platform " + DynamoPlatformChartURL + " --namespace dynamo-system --create-namespace",
-					Description: "Install the Dynamo platform operator v1.0.0. This chart includes the required CRDs.",
+					Command:     "helm upgrade --install dynamo-platform " + DynamoPlatformChartURL + " --namespace dynamo-system --create-namespace --set-json global.grove.install=true",
+					Description: "Install the Dynamo platform operator v1.0.0 with bundled Grove enabled by default. This chart includes the required CRDs.",
 				},
 			},
 		},

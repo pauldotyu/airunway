@@ -445,7 +445,8 @@ export RELEASE_VERSION=1.0.0
 helm upgrade --install dynamo-platform \
   https://helm.ngc.nvidia.com/nvidia/ai-dynamo/charts/dynamo-platform-${RELEASE_VERSION}.tgz \
   --namespace ${NAMESPACE} \
-  --create-namespace
+  --create-namespace \
+  --set-json global.grove.install=true
 ```
 
 ## Adding a New Provider

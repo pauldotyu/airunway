@@ -51,8 +51,18 @@ func TestGetProviderConfigSpec(t *testing.T) {
 	if spec.Installation.HelmCharts[0].Chart != DynamoPlatformChartURL {
 		t.Errorf("expected platform chart URL %q, got %q", DynamoPlatformChartURL, spec.Installation.HelmCharts[0].Chart)
 	}
+	groveInstall, ok := spec.Installation.HelmCharts[0].Values["global.grove.install"]
+	if !ok {
+		t.Fatal("expected dynamo platform chart to enable Grove by default")
+	}
+	if string(groveInstall.Raw) != "true" {
+		t.Fatalf("expected global.grove.install=true, got %s", string(groveInstall.Raw))
+	}
 	if len(spec.Installation.Steps) != 1 {
 		t.Fatalf("expected 1 installation step, got %d", len(spec.Installation.Steps))
+	}
+	if spec.Installation.Steps[0].Command != "helm upgrade --install dynamo-platform "+DynamoPlatformChartURL+" --namespace dynamo-system --create-namespace --set-json global.grove.install=true" {
+		t.Fatalf("unexpected installation command: %s", spec.Installation.Steps[0].Command)
 	}
 
 	if spec.Documentation != ProviderDocumentation {
@@ -71,8 +81,8 @@ func TestProviderConstants(t *testing.T) {
 	if ProviderConfigName != "dynamo" {
 		t.Errorf("expected provider config name 'dynamo', got %s", ProviderConfigName)
 	}
-	if ProviderVersion != "dynamo-provider:v0.1.0" {
-		t.Errorf("expected provider version 'dynamo-provider:v0.1.0', got %s", ProviderVersion)
+	if ProviderVersion != "dynamo-provider:v0.2.0" {
+		t.Errorf("expected provider version 'dynamo-provider:v0.2.0', got %s", ProviderVersion)
 	}
 }
 
