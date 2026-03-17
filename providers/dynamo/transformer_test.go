@@ -236,7 +236,7 @@ func TestBuildEngineArgs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	expected := []string{"--model", "meta-llama/Llama-2-7b-chat-hf"}
+	expected := []string{"--model", "meta-llama/Llama-2-7b-chat-hf", "--connector", VLLMConnectorNone}
 	if !sliceEqual(args, expected) {
 		t.Errorf("unexpected args: %v, expected %v", args, expected)
 	}
@@ -260,7 +260,7 @@ func TestBuildEngineArgs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	expected = []string{"--model", "meta-llama/Llama-2-7b-chat-hf", "--max-model-len", "4096"}
+	expected = []string{"--model", "meta-llama/Llama-2-7b-chat-hf", "--max-model-len", "4096", "--connector", VLLMConnectorNone}
 	if !sliceEqual(args, expected) {
 		t.Errorf("unexpected args: %v, expected %v", args, expected)
 	}
@@ -711,6 +711,58 @@ func TestBuildEngineArgsWithCustomArgs(t *testing.T) {
 	}
 }
 
+func TestBuildEngineArgsDefaultsAggregatedVLLMConnectorToNone(t *testing.T) {
+	tr := NewTransformer()
+	md := newTestMD("test", "default")
+
+	args, err := tr.buildEngineArgs(md)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	assertArg(t, args, "--connector", VLLMConnectorNone)
+}
+
+func TestBuildEngineArgsPreservesExplicitConnectorOverride(t *testing.T) {
+	tr := NewTransformer()
+	md := newTestMD("test", "default")
+	md.Spec.Engine.Args = map[string]string{
+		"connector": VLLMConnectorNIXL,
+	}
+
+	args, err := tr.buildEngineArgs(md)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	assertArg(t, args, "--connector", VLLMConnectorNIXL)
+
+	connectorFlags := 0
+	for _, arg := range args {
+		if arg == "--connector" {
+			connectorFlags++
+		}
+	}
+	if connectorFlags != 1 {
+		t.Fatalf("expected exactly one --connector flag, got %d in %v", connectorFlags, args)
+	}
+}
+
+func TestBuildEngineArgsDisaggregatedLeavesConnectorToRuntimeDefault(t *testing.T) {
+	tr := NewTransformer()
+	md := newTestMD("test", "default")
+	md.Spec.Serving = &airunwayv1alpha1.ServingSpec{
+		Mode: airunwayv1alpha1.ServingModeDisaggregated,
+	}
+
+	args, err := tr.buildEngineArgs(md)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	assertNoArg(t, args, "--connector")
+}
+
 func TestBuildEngineArgsDeterministicOrder(t *testing.T) {
 	tr := NewTransformer()
 	md := newTestMD("test", "default")
@@ -1098,6 +1150,106 @@ func TestTransformWithCustomImage(t *testing.T) {
 	mc, _ := eps["mainContainer"].(map[string]interface{})
 	if mc["image"] != "my-registry.io/custom-vllm:v1" {
 		t.Errorf("expected custom image, got %v", mc["image"])
+	}
+}
+
+func TestTransformAggregatedVLLMWorkersDoNotInjectNixlSideChannelHostByDefault(t *testing.T) {
+	tr := NewTransformer()
+	md := newTestMD("test-model", "default")
+
+	resources, err := tr.Transform(context.Background(), md)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	dgd := resources[0]
+	spec, _, _ := unstructured.NestedMap(dgd.Object, "spec")
+	services, _ := spec["services"].(map[string]interface{})
+	worker, _ := services["VllmWorker"].(map[string]interface{})
+
+	if env := findEnvVar(worker, "VLLM_NIXL_SIDE_CHANNEL_HOST"); env != nil {
+		t.Fatalf("did not expect VLLM_NIXL_SIDE_CHANNEL_HOST for aggregated vLLM worker, got %v", env)
+	}
+}
+
+func TestTransformAggregatedVLLMWorkersInjectNixlSideChannelHostWhenConnectorIsNixl(t *testing.T) {
+	tr := NewTransformer()
+	md := newTestMD("test-model", "default")
+	md.Spec.Engine.Args = map[string]string{
+		"connector": VLLMConnectorNIXL,
+	}
+
+	resources, err := tr.Transform(context.Background(), md)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	dgd := resources[0]
+	spec, _, _ := unstructured.NestedMap(dgd.Object, "spec")
+	services, _ := spec["services"].(map[string]interface{})
+	worker, _ := services["VllmWorker"].(map[string]interface{})
+
+	assertFieldRefEnvVar(t, worker, "VLLM_NIXL_SIDE_CHANNEL_HOST", "status.podIP")
+}
+
+func TestTransformDisaggregatedVLLMWorkersInjectNixlSideChannelHost(t *testing.T) {
+	tr := NewTransformer()
+	md := newTestMD("test-model", "default")
+	md.Spec.Serving = &airunwayv1alpha1.ServingSpec{
+		Mode: airunwayv1alpha1.ServingModeDisaggregated,
+	}
+	md.Spec.Scaling = &airunwayv1alpha1.ScalingSpec{
+		Prefill: &airunwayv1alpha1.ComponentScalingSpec{
+			Replicas: 1,
+			GPU:      &airunwayv1alpha1.GPUSpec{Count: 1, Type: "nvidia.com/gpu"},
+		},
+		Decode: &airunwayv1alpha1.ComponentScalingSpec{
+			Replicas: 1,
+			GPU:      &airunwayv1alpha1.GPUSpec{Count: 1, Type: "nvidia.com/gpu"},
+		},
+	}
+
+	resources, err := tr.Transform(context.Background(), md)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	dgd := resources[0]
+	spec, _, _ := unstructured.NestedMap(dgd.Object, "spec")
+	services, _ := spec["services"].(map[string]interface{})
+
+	for name, svcName := range map[string]string{
+		"prefill": "VllmPrefillWorker",
+		"decode":  "VllmDecodeWorker",
+	} {
+		worker, _ := services[svcName].(map[string]interface{})
+		if worker == nil {
+			t.Fatalf("expected %s service", svcName)
+		}
+		assertFieldRefEnvVar(t, worker, "VLLM_NIXL_SIDE_CHANNEL_HOST", "status.podIP")
+		if testing.Verbose() {
+			t.Logf("verified %s worker env injection", name)
+		}
+	}
+}
+
+func TestTransformNonVLLMWorkersDoNotInjectNixlSideChannelHost(t *testing.T) {
+	tr := NewTransformer()
+	md := newTestMD("test-model", "default")
+	md.Spec.Engine.Type = airunwayv1alpha1.EngineTypeSGLang
+
+	resources, err := tr.Transform(context.Background(), md)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	dgd := resources[0]
+	spec, _, _ := unstructured.NestedMap(dgd.Object, "spec")
+	services, _ := spec["services"].(map[string]interface{})
+	worker, _ := services["VllmWorker"].(map[string]interface{})
+
+	if env := findEnvVar(worker, "VLLM_NIXL_SIDE_CHANNEL_HOST"); env != nil {
+		t.Fatalf("did not expect VLLM_NIXL_SIDE_CHANNEL_HOST for non-vLLM worker, got %v", env)
 	}
 }
 
@@ -1522,5 +1674,58 @@ func TestTransformWithReadOnlyVolume(t *testing.T) {
 	}
 	if mount["readOnly"] != true {
 		t.Errorf("expected readOnly=true, got %v", mount["readOnly"])
+	}
+}
+
+func findEnvVar(service map[string]interface{}, name string) map[string]interface{} {
+	eps, _ := service["extraPodSpec"].(map[string]interface{})
+	mc, _ := eps["mainContainer"].(map[string]interface{})
+	envList, _ := mc["env"].([]interface{})
+	for _, e := range envList {
+		envMap, _ := e.(map[string]interface{})
+		if envMap["name"] == name {
+			return envMap
+		}
+	}
+	return nil
+}
+
+func assertFieldRefEnvVar(t *testing.T, service map[string]interface{}, name, fieldPath string) {
+	t.Helper()
+
+	env := findEnvVar(service, name)
+	if env == nil {
+		t.Fatalf("expected env var %s to be present", name)
+	}
+
+	valueFrom, _ := env["valueFrom"].(map[string]interface{})
+	fieldRef, _ := valueFrom["fieldRef"].(map[string]interface{})
+	if fieldRef["fieldPath"] != fieldPath {
+		t.Fatalf("expected %s fieldPath %q, got %v", name, fieldPath, fieldRef["fieldPath"])
+	}
+}
+
+func assertArg(t *testing.T, args []string, flag, value string) {
+	t.Helper()
+
+	for i := 0; i < len(args)-1; i++ {
+		if args[i] == flag {
+			if args[i+1] != value {
+				t.Fatalf("expected %s value %q, got %q in %v", flag, value, args[i+1], args)
+			}
+			return
+		}
+	}
+
+	t.Fatalf("expected %s %q in args: %v", flag, value, args)
+}
+
+func assertNoArg(t *testing.T, args []string, flag string) {
+	t.Helper()
+
+	for _, arg := range args {
+		if arg == flag {
+			t.Fatalf("did not expect %s in args: %v", flag, args)
+		}
 	}
 }

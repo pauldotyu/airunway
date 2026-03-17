@@ -49,6 +49,10 @@ const (
 	// Sub-component types for disaggregated mode
 	SubComponentTypePrefill = "prefill"
 	SubComponentTypeDecode  = "decode"
+
+	// vLLM connector modes used by Dynamo.
+	VLLMConnectorNIXL = "nixl"
+	VLLMConnectorNone = "none"
 )
 
 // DynamoOverrides contains Dynamo-specific override configuration
@@ -320,6 +324,7 @@ func (t *Transformer) buildAggregatedWorker(md *airunwayv1alpha1.ModelDeployment
 
 	// Add storage configuration (PVC volume mounts and HF_HOME)
 	t.addStorageConfig(worker, md)
+	t.maybeInjectVLLMSideChannelHost(worker, md)
 
 	return worker, nil
 }
@@ -381,6 +386,7 @@ func (t *Transformer) buildPrefillWorker(md *airunwayv1alpha1.ModelDeployment, i
 
 	// Add storage configuration (PVC volume mounts and HF_HOME)
 	t.addStorageConfig(worker, md)
+	t.maybeInjectVLLMSideChannelHost(worker, md)
 
 	return worker, nil
 }
@@ -441,6 +447,7 @@ func (t *Transformer) buildDecodeWorker(md *airunwayv1alpha1.ModelDeployment, im
 
 	// Add storage configuration (PVC volume mounts and HF_HOME)
 	t.addStorageConfig(worker, md)
+	t.maybeInjectVLLMSideChannelHost(worker, md)
 
 	return worker, nil
 }
@@ -508,6 +515,15 @@ func (t *Transformer) buildEngineArgs(md *airunwayv1alpha1.ModelDeployment) ([]s
 		}
 	}
 
+	// Aggregated vLLM deployments do not need a KV transfer connector, so make the
+	// default explicit instead of inheriting Dynamo's runtime default.
+	if md.ResolvedEngineType() == airunwayv1alpha1.EngineTypeVLLM {
+		if _, hasConnectorOverride := md.Spec.Engine.Args["connector"]; !hasConnectorOverride &&
+			t.resolvedServingMode(md) == airunwayv1alpha1.ServingModeAggregated {
+			args = append(args, "--connector", VLLMConnectorNone)
+		}
+	}
+
 	// Add custom engine args with key validation (sorted for deterministic output)
 	keys := make([]string, 0, len(md.Spec.Engine.Args))
 	for k := range md.Spec.Engine.Args {
@@ -527,6 +543,29 @@ func (t *Transformer) buildEngineArgs(md *airunwayv1alpha1.ModelDeployment) ([]s
 	}
 
 	return args, nil
+}
+
+func (t *Transformer) resolvedServingMode(md *airunwayv1alpha1.ModelDeployment) airunwayv1alpha1.ServingMode {
+	if md.Spec.Serving != nil && md.Spec.Serving.Mode != "" {
+		return md.Spec.Serving.Mode
+	}
+	return airunwayv1alpha1.ServingModeAggregated
+}
+
+func (t *Transformer) effectiveVLLMConnector(md *airunwayv1alpha1.ModelDeployment) string {
+	if md.ResolvedEngineType() != airunwayv1alpha1.EngineTypeVLLM {
+		return ""
+	}
+
+	if connector, hasConnectorOverride := md.Spec.Engine.Args["connector"]; hasConnectorOverride {
+		return connector
+	}
+
+	if t.resolvedServingMode(md) == airunwayv1alpha1.ServingModeAggregated {
+		return VLLMConnectorNone
+	}
+
+	return VLLMConnectorNIXL
 }
 
 // engineCommand returns the command slice for the given engine type
@@ -669,6 +708,15 @@ func hasEnvVar(md *airunwayv1alpha1.ModelDeployment, name string) bool {
 	return false
 }
 
+// maybeInjectVLLMSideChannelHost ensures each NIXL-backed vLLM worker advertises its own pod IP.
+func (t *Transformer) maybeInjectVLLMSideChannelHost(service map[string]interface{}, md *airunwayv1alpha1.ModelDeployment) {
+	if !strings.EqualFold(t.effectiveVLLMConnector(md), VLLMConnectorNIXL) {
+		return
+	}
+
+	t.injectEnvVarFromFieldRef(service, "VLLM_NIXL_SIDE_CHANNEL_HOST", "status.podIP")
+}
+
 // injectEnvVar adds an environment variable to the mainContainer's env list in extraPodSpec
 func (t *Transformer) injectEnvVar(service map[string]interface{}, name, value string) {
 	extraPodSpec, ok := service["extraPodSpec"].(map[string]interface{})
@@ -687,6 +735,32 @@ func (t *Transformer) injectEnvVar(service map[string]interface{}, name, value s
 	envList = append(envList, map[string]interface{}{
 		"name":  name,
 		"value": value,
+	})
+	mainContainer["env"] = envList
+}
+
+// injectEnvVarFromFieldRef adds an environment variable sourced from a pod field.
+func (t *Transformer) injectEnvVarFromFieldRef(service map[string]interface{}, name, fieldPath string) {
+	extraPodSpec, ok := service["extraPodSpec"].(map[string]interface{})
+	if !ok {
+		extraPodSpec = map[string]interface{}{}
+		service["extraPodSpec"] = extraPodSpec
+	}
+
+	mainContainer, ok := extraPodSpec["mainContainer"].(map[string]interface{})
+	if !ok {
+		mainContainer = map[string]interface{}{}
+		extraPodSpec["mainContainer"] = mainContainer
+	}
+
+	envList, _ := mainContainer["env"].([]interface{})
+	envList = append(envList, map[string]interface{}{
+		"name": name,
+		"valueFrom": map[string]interface{}{
+			"fieldRef": map[string]interface{}{
+				"fieldPath": fieldPath,
+			},
+		},
 	})
 	mainContainer["env"] = envList
 }
