@@ -62,7 +62,7 @@ UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
     HEADLAMP_PLUGINS_DIR := $(HOME)/Library/Application Support/Headlamp/plugins
 else ifeq ($(UNAME_S),Linux)
-    HEADLAMP_PLUGINS_DIR := $(HOME)/.config/Headlamp/plugins
+    HEADLAMP_PLUGINS_DIR := $(HOME)/.var/app/io.kinvolk.Headlamp/config/Headlamp/plugins
 else
     HEADLAMP_PLUGINS_DIR := $(HOME)/.config/Headlamp/plugins
 endif
