@@ -68,6 +68,28 @@ var _ = Describe("ModelDeployment Webhook", func() {
 			Expect(obj.Spec.Model.Storage.Volumes[0].MountPath).To(Equal("/model-cache"))
 		})
 
+		It("Should default GPU to 1 when resources are nil", func() {
+			obj.Spec.Model.ID = "meta-llama/Llama-2-7b-chat-hf"
+			obj.Spec.Serving = &airunwayv1alpha1.ServingSpec{Mode: airunwayv1alpha1.ServingModeAggregated}
+			obj.Spec.Resources = nil
+			err := defaulter.Default(ctx, obj)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(obj.Spec.Resources).NotTo(BeNil())
+			Expect(obj.Spec.Resources.GPU).NotTo(BeNil())
+			Expect(obj.Spec.Resources.GPU.Count).To(Equal(int32(1)))
+			Expect(obj.Spec.Resources.GPU.Type).To(Equal("nvidia.com/gpu"))
+		})
+
+		It("Should not default GPU when resources is set without GPU (CPU-only deployment)", func() {
+			obj.Spec.Model.ID = "unsloth/NVIDIA-Nemotron-3-Nano-4B-GGUF"
+			obj.Spec.Serving = &airunwayv1alpha1.ServingSpec{Mode: airunwayv1alpha1.ServingModeAggregated}
+			obj.Spec.Resources = &airunwayv1alpha1.ResourceSpec{} // explicitly set, no GPU
+			err := defaulter.Default(ctx, obj)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(obj.Spec.Resources).NotTo(BeNil())
+			Expect(obj.Spec.Resources.GPU).To(BeNil())
+		})
+
 		It("Should default mountPath for compilationCache purpose", func() {
 			obj.Spec.Model.ID = "meta-llama/Llama-2-7b-chat-hf"
 			obj.Spec.Model.Storage = &airunwayv1alpha1.StorageSpec{

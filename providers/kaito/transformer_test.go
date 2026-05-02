@@ -796,3 +796,78 @@ func TestTransformPreservesOwnerReference(t *testing.T) {
 		t.Error("expected controller=true on owner ref")
 	}
 }
+
+func TestTransformLlamaCppCPUOnlyAvoidsGPUNodes(t *testing.T) {
+	tr := NewTransformer()
+	md := newTestMD("test-model", "default")
+	md.Spec.Engine.Type = airunwayv1alpha1.EngineTypeLlamaCpp
+	md.Spec.Image = "my-image:latest"
+	// CPU-only: resources set but no GPU
+	md.Spec.Resources = &airunwayv1alpha1.ResourceSpec{}
+
+	resources, err := tr.Transform(context.Background(), md)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ws := resources[0]
+	inference, _, _ := unstructured.NestedMap(ws.Object, "inference")
+	template, _ := inference["template"].(map[string]interface{})
+	spec, _ := template["spec"].(map[string]interface{})
+
+	// Should have required affinity to exclude GPU nodes
+	affinity, ok := spec["affinity"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected affinity on CPU-only pod template")
+	}
+	nodeAffinity, ok := affinity["nodeAffinity"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected nodeAffinity in affinity")
+	}
+	required, ok := nodeAffinity["requiredDuringSchedulingIgnoredDuringExecution"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected requiredDuringSchedulingIgnoredDuringExecution")
+	}
+	terms, ok := required["nodeSelectorTerms"].([]interface{})
+	if !ok || len(terms) == 0 {
+		t.Fatal("expected nodeSelectorTerms")
+	}
+	term, _ := terms[0].(map[string]interface{})
+	exprs, ok := term["matchExpressions"].([]interface{})
+	if !ok || len(exprs) != 2 {
+		t.Fatalf("expected 2 matchExpressions (GFD + NFD labels), got %d", len(exprs))
+	}
+	expr0, _ := exprs[0].(map[string]interface{})
+	if expr0["key"] != "nvidia.com/gpu.present" || expr0["operator"] != "DoesNotExist" {
+		t.Errorf("expected nvidia.com/gpu.present DoesNotExist, got %v", expr0)
+	}
+	expr1, _ := exprs[1].(map[string]interface{})
+	if expr1["key"] != "feature.node.kubernetes.io/pci-10de.present" || expr1["operator"] != "DoesNotExist" {
+		t.Errorf("expected feature.node.kubernetes.io/pci-10de.present DoesNotExist, got %v", expr1)
+	}
+}
+
+func TestTransformLlamaCppGPUNoAffinity(t *testing.T) {
+	tr := NewTransformer()
+	md := newTestMD("test-model", "default")
+	md.Spec.Engine.Type = airunwayv1alpha1.EngineTypeLlamaCpp
+	md.Spec.Image = "my-image:latest"
+	md.Spec.Resources = &airunwayv1alpha1.ResourceSpec{
+		GPU: &airunwayv1alpha1.GPUSpec{Count: 1, Type: "nvidia.com/gpu"},
+	}
+
+	resources, err := tr.Transform(context.Background(), md)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ws := resources[0]
+	inference, _, _ := unstructured.NestedMap(ws.Object, "inference")
+	template, _ := inference["template"].(map[string]interface{})
+	spec, _ := template["spec"].(map[string]interface{})
+
+	// GPU deployment should NOT have the anti-GPU affinity
+	if _, ok := spec["affinity"]; ok {
+		t.Error("GPU deployment should not have anti-GPU node affinity")
+	}
+}

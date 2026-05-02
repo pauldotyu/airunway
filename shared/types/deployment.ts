@@ -509,7 +509,10 @@ export function toModelDeploymentSpec(config: DeploymentConfig): ModelDeployment
     spec.scaling = {
       replicas: config.replicas,
     };
-    if (!cpuOnlyDeployment && config.resources?.gpu) {
+    if (cpuOnlyDeployment) {
+      // Explicitly set empty resources to prevent webhook from defaulting GPU
+      spec.resources = {};
+    } else if (config.resources?.gpu) {
       spec.resources = {
         gpu: {
           count: config.resources.gpu,

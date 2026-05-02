@@ -205,7 +205,8 @@ describe('Deployment Routes', () => {
       expect(res.status).toBe(200);
 
       const data = await res.json();
-      expect(data.resources[0].manifest.spec.resources).toBeUndefined();
+      expect(data.resources[0].manifest.spec.resources).toEqual({});
+      expect(data.resources[0].manifest.spec.resources.gpu).toBeUndefined();
       expect(data.resources[0].manifest.spec.engine.type).toBe('llamacpp');
     });
   });

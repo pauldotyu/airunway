@@ -218,6 +218,31 @@ func (t *Transformer) buildLlamaCppTemplate(md *airunwayv1alpha1.ModelDeployment
 		},
 	}
 
+	// For CPU-only deployments (no GPU requested), add a hard node affinity to
+	// exclude GPU nodes. We check two labels to cover different GPU detection setups:
+	//   - nvidia.com/gpu.present          → set by NVIDIA GPU Feature Discovery (GFD)
+	// Both must be absent (ANDed) for the node to qualify.
+	// If neither label exists on any node (no GPU detection running), all nodes
+	// match DoesNotExist and the pod schedules normally.
+	if md.Spec.Resources == nil || md.Spec.Resources.GPU == nil || md.Spec.Resources.GPU.Count == 0 {
+		podSpec := template["spec"].(map[string]interface{})
+		podSpec["affinity"] = map[string]interface{}{
+			"nodeAffinity": map[string]interface{}{
+				"requiredDuringSchedulingIgnoredDuringExecution": map[string]interface{}{
+					"nodeSelectorTerms": []interface{}{
+						map[string]interface{}{
+							"matchExpressions": []interface{}{
+								map[string]interface{}{
+									"key":      "nvidia.com/gpu.present",
+									"operator": "DoesNotExist",
+								}},
+						},
+					},
+				},
+			},
+		}
+	}
+
 	return template, nil
 }
 
