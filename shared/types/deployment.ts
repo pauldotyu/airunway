@@ -198,9 +198,15 @@ export interface EndpointStatus {
   port?: number;
 }
 
+export interface EngineStatus {
+  selectedReason?: string;
+  type?: string;
+}
+
 export interface ModelDeploymentStatus {
   phase?: DeploymentPhase;
   message?: string;
+  engine?: EngineStatus;
   provider?: ProviderStatus;
   replicas?: ReplicaStatus;
   prefillReplicas?: {
