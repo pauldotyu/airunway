@@ -39,10 +39,10 @@ const (
 	ProviderConfigName = "dynamo"
 
 	// ProviderVersion is the version of the AIRunway Dynamo provider controller.
-	ProviderVersion = "dynamo-provider:v0.2.0"
+	ProviderVersion = "dynamo-provider:v0.3.0"
 
 	// DynamoPlatformChartVersion is the upstream Dynamo platform chart version.
-	DynamoPlatformChartVersion = "1.0.2"
+	DynamoPlatformChartVersion = "1.1.1"
 
 	// DynamoPlatformChartURL is the upstream Dynamo platform chart package.
 	DynamoPlatformChartURL = "https://helm.ngc.nvidia.com/nvidia/ai-dynamo/charts/dynamo-platform-" + DynamoPlatformChartVersion + ".tgz"
@@ -145,7 +145,7 @@ func GetInstallationInfo() *airunwayv1alpha1.InstallationInfo {
 			{
 				Title:       "Install Dynamo Platform",
 				Command:     "helm upgrade --install dynamo-platform " + DynamoPlatformChartURL + " --namespace dynamo-system --create-namespace --set-json global.grove.install=true",
-				Description: "Install the Dynamo platform operator v1.0.2 with bundled Grove enabled by default. This chart includes the required CRDs.",
+				Description: "Install the Dynamo platform operator v1.1.1 with bundled Grove enabled by default. This chart includes the required CRDs.",
 			},
 		},
 	}
