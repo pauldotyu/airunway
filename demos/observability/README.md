@@ -72,6 +72,10 @@ Deploy a ServiceMonitor for the airunway-controller:
 kubectl apply -f ./demos/observability/airunway-servicemonitor.yaml
 ```
 
+> [!NOTE]
+>
+> The controller emits both classic and native histograms. By default, the [ServiceMonitor](./airunway-servicemonitor.yaml) has been configured with `scrapeClassicHistograms: true`, and the [sample dashboard](./sample-dashboard.json) queries classic `_bucket` metrics. To switch to native histograms, remove the `scrapeClassicHistograms: true` line and update the dashboard queries accordingly.
+
 To grant Prometheus access to the metrics endpoint, a `ClusterRoleBinding` is needed for the Prometheus ServiceAccount.
 
 ```bash

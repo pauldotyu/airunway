@@ -9,6 +9,10 @@ AI Runway exposes Prometheus metrics from both the controller and inference prov
 - **Platform engineering indicators** - phase transitions (deployment frequency, change failure rate), lead time (creation → ready), infrastructure provisioning duration
 - **Inference engine metrics** - vLLM request queues, time-to-first-token, KV-cache utilization, token throughput (via provider PodMonitors)
 
+> [!NOTE]
+>
+> The controller emits both classic histogram buckets and native histograms for improved compatibility. When using Prometheus with native histogram support enabled (`--enable-feature=native-histograms`), users may need to configure their ServiceMonitor with `scrapeClassicHistograms: true`.
+
 ## Getting started
 
 See the [Observability Demo](../demos/observability/README.md) for a complete walkthrough covering:
