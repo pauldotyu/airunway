@@ -123,7 +123,7 @@ kubectl delete -f ./demos/observability/sample-modeldeployment.yaml
 
 ## 7. Set up provider PodMonitors (optional)
 
-Each provider (KAITO, Dynamo, KubeRay, llm-d) runs inference pods that can expose vLLM or engine-specific metrics. PodMonitor manifests are provided in this directory for each provider.
+Each provider (KAITO, KubeRay, llm-d) runs inference pods that can expose vLLM or engine-specific metrics. PodMonitor manifests are provided in this directory for each provider.
 
 > [!WARNING]
 > Review the PodMonitor manifests and adjust the selectors as needed.
@@ -134,9 +134,6 @@ Apply the ones matching the providers you have installed:
 # KAITO
 kubectl apply -f ./demos/observability/kaito-podmonitor.yaml
 
-# Dynamo
-kubectl apply -f ./demos/observability/dynamo-podmonitor.yaml
-
 # KubeRay
 kubectl apply -f ./demos/observability/kuberay-podmonitor.yaml
 
@@ -144,12 +141,29 @@ kubectl apply -f ./demos/observability/kuberay-podmonitor.yaml
 kubectl apply -f ./demos/observability/llmd-podmonitor.yaml
 ```
 
+> [!NOTE]
+> **Dynamo** is not listed here because it ships its own PodMonitors (`dynamo-worker`, `dynamo-frontend`, etc.) that scrape its pods automatically. No additional PodMonitor is needed.
+
 Each PodMonitor:
 
 - Targets pods by provider-specific labels (e.g., `kaito.sh/workspace`, `ray.io/node-type`, etc.)
 - Allows cross-namespace discovery of provider pods
 - Adds a `provider` label for cross-provider querying
-- Adds a `model_deployment` label linking metrics back to the ModelDeployment name
+
+### Correlating vLLM metrics with ModelDeployments
+
+The provided PodMonitors add a `provider` label (`kuberay`, `kaito`, or `llm-d`) and normalize all vLLM metrics to use the `vllm:` prefix. vLLM metrics natively include a `model_name` label identifying the served model. Together, `provider` and `model_name` let you aggregate and filter across providers.
+
+Dynamo uses its own PodMonitors and will not have a `provider` label. Filter Dynamo metrics by `namespace` or `job` instead.
+
+| Provider | Notes                                                                                 |
+| -------- | ------------------------------------------------------------------------------------- |
+| KubeRay  | Ray Serve emits `ray_vllm_*` metrics; the PodMonitor normalizes them to `vllm:*`      |
+| KAITO    | Standalone vLLM (vLLM presets only; llamacpp presets do not expose inference metrics) |
+| Dynamo   | Ships its own PodMonitors; also emits `dynamo_*` runtime metrics                      |
+| llm-d    | Standalone vLLM                                                                       |
+
+All providers expose metrics under the `vllm:` prefix. KubeRay metrics are automatically normalized from `ray_vllm_*` to `vllm:*` via `metricRelabelings` in the PodMonitor, so the same PromQL queries work across all providers.
 
 ## 8. Import the Grafana dashboard
 
