@@ -764,9 +764,12 @@ func (r *ModelDeploymentReconciler) recordMetrics(md *airunwayv1alpha1.ModelDepl
 	// When previous.Phase is empty (first reconciliation or after controller restart),
 	// we skip recording a transition to avoid a spurious "" -> X event.
 	if previous.Phase != "" && currentPhase != previous.Phase {
-		airmetrics.PhaseTransitionsTotal.WithLabelValues(
-			providerName, string(previous.Phase), string(currentPhase),
-		).Inc()
+		// Skip recording transitions that involve deployments without providers.
+		if providerName != "" {
+			airmetrics.PhaseTransitionsTotal.WithLabelValues(
+				providerName, string(previous.Phase), string(currentPhase),
+			).Inc()
+		}
 	}
 
 	// Track when the Deploying phase starts. This gives us a reliable wall-clock
@@ -784,20 +787,23 @@ func (r *ModelDeploymentReconciler) recordMetrics(md *airunwayv1alpha1.ModelDepl
 		previous.Phase != "" &&
 		previous.Phase != airunwayv1alpha1.DeploymentPhaseRunning
 	if transitionedToRunning && !previous.RunningMetricsRecorded {
-		// Lead time: wall-clock time from CR creation to first observed transition
-		// into Running.
-		leadTime := time.Since(md.CreationTimestamp.Time).Seconds()
-		airmetrics.ReadyDurationSeconds.WithLabelValues(providerName).Observe(leadTime)
+		// Skip recording if provider is not known.
+		if providerName != "" {
+			// Lead time: wall-clock time from CR creation to first observed transition
+			// into Running.
+			leadTime := time.Since(md.CreationTimestamp.Time).Seconds()
+			airmetrics.ReadyDurationSeconds.WithLabelValues(providerName).Observe(leadTime)
 
-		// Provision duration: wall-clock time from Deploying to Running.
-		// Only recorded when we observed the Deploying phase start (i.e. the
-		// controller was running when the deployment first entered Deploying).
-		if !entry.DeployingTimestamp.IsZero() {
-			provisionDuration := time.Since(entry.DeployingTimestamp).Seconds()
-			airmetrics.ProvisionDurationSeconds.WithLabelValues(providerName).Observe(provisionDuration)
+			// Provision duration: wall-clock time from Deploying to Running.
+			// Only recorded when we observed the Deploying phase start (i.e. the
+			// controller was running when the deployment first entered Deploying).
+			if !entry.DeployingTimestamp.IsZero() {
+				provisionDuration := time.Since(entry.DeployingTimestamp).Seconds()
+				airmetrics.ProvisionDurationSeconds.WithLabelValues(providerName).Observe(provisionDuration)
+			}
+
+			entry.RunningMetricsRecorded = true
 		}
-
-		entry.RunningMetricsRecorded = true
 	}
 
 	// Reset RunningMetricsRecorded when leaving Running (allows re-recording if
