@@ -35,15 +35,22 @@ const (
 	// ProviderConfigName is the name of the InferenceProviderConfig for llm-d
 	ProviderConfigName = "llmd"
 
-	// ProviderVersion is the version of the llm-d provider
-	ProviderVersion = "llmd-provider:v0.3.0"
-
 	// ProviderDocumentation is the documentation URL for the llm-d provider
 	ProviderDocumentation = "https://github.com/kaito-project/airunway/tree/main/docs/providers/llmd.md"
 
 	// HeartbeatInterval is the interval for updating the provider heartbeat
 	HeartbeatInterval = 1 * time.Minute
 )
+
+// ProviderVersion is the version of the llm-d provider.
+//
+// Injected at build time via:
+//
+//	-ldflags "-X github.com/kaito-project/airunway/providers/llmd.ProviderVersion=llmd-provider:<version>"
+//
+// (see Makefile and Dockerfile). The string literal below is a fallback for
+// `go run` / `go test` invocations that bypass the Makefile.
+var ProviderVersion = "llmd-provider:dev"
 
 // ProviderConfigManager handles registration and heartbeat for the llm-d provider
 type ProviderConfigManager struct {

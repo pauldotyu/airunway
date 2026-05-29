@@ -8,6 +8,7 @@ ARG TARGETARCH
 # `docker build` cannot silently fall back to the Go source literal in config.go
 # and produce an image untracked by versions.env.
 ARG DYNAMO_VERSION
+ARG PROVIDER_VERSION
 
 WORKDIR /workspace
 
@@ -34,9 +35,10 @@ RUN cd providers/dynamo && go mod tidy
 # Require DYNAMO_VERSION so hand-run `docker build` cannot silently drift from
 # versions.env. Builds should pass it via --build-arg (the Makefile does this).
 RUN test -n "${DYNAMO_VERSION}" || (echo "ERROR: DYNAMO_VERSION build arg is required (see versions.env); pass --build-arg DYNAMO_VERSION=..." >&2; exit 1)
+RUN test -n "${PROVIDER_VERSION}" || (echo "ERROR: PROVIDER_VERSION build arg is required; pass --build-arg PROVIDER_VERSION=dynamo-provider:<version>" >&2; exit 1)
 RUN cd providers/dynamo && CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
     go build -a \
-      -ldflags="-X github.com/kaito-project/airunway/providers/dynamo.DynamoVersion=${DYNAMO_VERSION}" \
+      -ldflags="-X github.com/kaito-project/airunway/providers/dynamo.DynamoVersion=${DYNAMO_VERSION} -X github.com/kaito-project/airunway/providers/dynamo.ProviderVersion=${PROVIDER_VERSION}" \
       -o provider cmd/main.go
 
 # Use distroless as minimal base image to package the provider binary

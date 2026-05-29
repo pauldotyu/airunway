@@ -2,6 +2,7 @@
 FROM --platform=$BUILDPLATFORM golang:1.25 AS builder
 ARG TARGETOS
 ARG TARGETARCH
+ARG PROVIDER_VERSION
 
 WORKDIR /workspace
 
@@ -25,7 +26,11 @@ COPY providers/llmd/ providers/llmd/
 RUN cd providers/llmd && go mod tidy
 
 # Build
-RUN cd providers/llmd && CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o provider cmd/main.go
+RUN test -n "${PROVIDER_VERSION}" || (echo "ERROR: PROVIDER_VERSION build arg is required; pass --build-arg PROVIDER_VERSION=llmd-provider:<version>" >&2; exit 1)
+RUN cd providers/llmd && CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
+    go build -a \
+      -ldflags="-X github.com/kaito-project/airunway/providers/llmd.ProviderVersion=${PROVIDER_VERSION}" \
+      -o provider cmd/main.go
 
 # Use distroless as minimal base image to package the provider binary
 FROM gcr.io/distroless/static:nonroot

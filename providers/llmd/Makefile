@@ -5,6 +5,11 @@ PUSH ?= false
 PUSH_ENABLED := $(filter true TRUE 1 yes YES on ON,$(PUSH))
 IMAGE_OUTPUT_FLAG := $(if $(PUSH_ENABLED),--push,--load)
 
+# Provider version injected at build time via -ldflags.
+# Set PROVIDER_VERSION when building release binaries/images.
+PROVIDER_VERSION ?= llmd-provider:dev
+LDFLAGS := -X github.com/kaito-project/airunway/providers/llmd.ProviderVersion=$(PROVIDER_VERSION)
+
 .PHONY: build vet test docker-build deploy generate-deploy-manifests
 
 ## Run go vet against code
@@ -19,12 +24,12 @@ test: vet
 
 ## Build the provider binary
 build: vet
-	go build -o bin/provider ./cmd/main.go
+	go build -ldflags="$(LDFLAGS)" -o bin/provider ./cmd/main.go
 	@echo "✅ llm-d provider built"
 
 ## Build provider Docker image
 docker-build:
-	docker buildx build --platform $(PLATFORM) $(IMAGE_OUTPUT_FLAG) -f Dockerfile -t $(IMG) ../..
+	docker buildx build --platform $(PLATFORM) $(IMAGE_OUTPUT_FLAG) --build-arg PROVIDER_VERSION=$(PROVIDER_VERSION) -f Dockerfile -t $(IMG) ../..
 	@echo "✅ llm-d provider image built: $(IMG) ($(PLATFORM), $(if $(PUSH_ENABLED),pushed,loaded locally))"
 
 ## Deploy provider to the K8s cluster

@@ -79,8 +79,8 @@ func TestProviderConstants(t *testing.T) {
 	if ProviderConfigName != "kuberay" {
 		t.Errorf("expected provider config name 'kuberay', got %s", ProviderConfigName)
 	}
-	if ProviderVersion != "kuberay-provider:v0.1.0" {
-		t.Errorf("expected provider version 'kuberay-provider:v0.1.0', got %s", ProviderVersion)
+	if ProviderVersion != "kuberay-provider:dev" {
+		t.Errorf("expected default provider version 'kuberay-provider:dev', got %s", ProviderVersion)
 	}
 }
 

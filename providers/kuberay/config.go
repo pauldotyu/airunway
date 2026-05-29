@@ -37,9 +37,6 @@ const (
 	// ProviderConfigName is the name of the InferenceProviderConfig for KubeRay
 	ProviderConfigName = "kuberay"
 
-	// ProviderVersion is the version of the KubeRay provider
-	ProviderVersion = "kuberay-provider:v0.3.0"
-
 	// ProviderDocumentation is the documentation URL for the KubeRay provider
 	ProviderDocumentation = "https://github.com/kaito-project/airunway/tree/main/docs/providers/kuberay.md"
 
@@ -48,6 +45,16 @@ const (
 
 	rayServiceResource = "rayservices"
 )
+
+// ProviderVersion is the version of the KubeRay provider.
+//
+// Injected at build time via:
+//
+//	-ldflags "-X github.com/kaito-project/airunway/providers/kuberay.ProviderVersion=kuberay-provider:<version>"
+//
+// (see Makefile and Dockerfile). The string literal below is a fallback for
+// `go run` / `go test` invocations that bypass the Makefile.
+var ProviderVersion = "kuberay-provider:dev"
 
 // ProviderConfigManager handles registration and heartbeat for the KubeRay provider
 type ProviderConfigManager struct {

@@ -38,9 +38,6 @@ const (
 	// ProviderConfigName is the name of the InferenceProviderConfig for Dynamo
 	ProviderConfigName = "dynamo"
 
-	// ProviderVersion is the version of the AIRunway Dynamo provider controller.
-	ProviderVersion = "dynamo-provider:v0.3.0"
-
 	// ProviderDocumentation is the documentation URL for the Dynamo provider
 	ProviderDocumentation = "https://github.com/kaito-project/airunway/tree/main/docs/providers/dynamo.md"
 
@@ -50,6 +47,16 @@ const (
 	dynamoPlatformValuesJSON      = `{"global.grove.install":true}`
 	dynamoGraphDeploymentResource = "dynamographdeployments"
 )
+
+// ProviderVersion is the version of the AIRunway Dynamo provider controller.
+//
+// Injected at build time via:
+//
+//	-ldflags "-X github.com/kaito-project/airunway/providers/dynamo.ProviderVersion=dynamo-provider:<version>"
+//
+// (see Makefile and Dockerfile). The string literal below is a fallback for
+// `go run` / `go test` invocations that bypass the Makefile.
+var ProviderVersion = "dynamo-provider:dev"
 
 // DynamoVersion is the upstream Dynamo platform chart and runtime image tag.
 //

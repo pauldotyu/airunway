@@ -12,7 +12,10 @@ export
 # Inject the build-time Dynamo runtime tag into the provider binary so it
 # tracks /versions.env automatically. The Go fallback in config.go only
 # applies when bypassing this Makefile (e.g. `go run`, `go test`).
-LDFLAGS := -X github.com/kaito-project/airunway/providers/dynamo.DynamoVersion=$(DYNAMO_VERSION)
+# Provider version injected at build time via -ldflags.
+# Set PROVIDER_VERSION when building release binaries/images.
+PROVIDER_VERSION ?= dynamo-provider:dev
+LDFLAGS := -X github.com/kaito-project/airunway/providers/dynamo.DynamoVersion=$(DYNAMO_VERSION) -X github.com/kaito-project/airunway/providers/dynamo.ProviderVersion=$(PROVIDER_VERSION)
 
 .PHONY: build vet test docker-build deploy generate-deploy-manifests setup-dynamo cleanup-dynamo test-e2e verify-versions
 
@@ -39,7 +42,7 @@ build: verify-versions vet
 
 ## Build provider Docker image
 docker-build: verify-versions
-	docker buildx build --platform $(PLATFORM) $(IMAGE_OUTPUT_FLAG) --build-arg DYNAMO_VERSION=$(DYNAMO_VERSION) -f Dockerfile -t $(IMG) ../..
+	docker buildx build --platform $(PLATFORM) $(IMAGE_OUTPUT_FLAG) --build-arg DYNAMO_VERSION=$(DYNAMO_VERSION) --build-arg PROVIDER_VERSION=$(PROVIDER_VERSION) -f Dockerfile -t $(IMG) ../..
 	@echo "✅ Dynamo provider image built: $(IMG) ($(PLATFORM), $(if $(PUSH_ENABLED),pushed,loaded locally))"
 
 ## Deploy provider to the K8s cluster

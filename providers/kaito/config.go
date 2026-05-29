@@ -36,15 +36,22 @@ const (
 	// ProviderConfigName is the name of the InferenceProviderConfig for KAITO
 	ProviderConfigName = "kaito"
 
-	// ProviderVersion is the version of the KAITO provider
-	ProviderVersion = "kaito-provider:v0.3.0"
-
 	// ProviderDocumentation is the documentation URL for the KAITO provider
 	ProviderDocumentation = "https://github.com/kaito-project/airunway/tree/main/docs/providers/kaito.md"
 
 	// HeartbeatInterval is the interval for updating the provider heartbeat
 	HeartbeatInterval = 1 * time.Minute
 )
+
+// ProviderVersion is the version of the KAITO provider.
+//
+// Injected at build time via:
+//
+//	-ldflags "-X github.com/kaito-project/airunway/providers/kaito.ProviderVersion=kaito-provider:<version>"
+//
+// (see Makefile and Dockerfile). The string literal below is a fallback for
+// `go run` / `go test` invocations that bypass the Makefile.
+var ProviderVersion = "kaito-provider:dev"
 
 // ProviderConfigManager handles registration and heartbeat for the KAITO provider
 type ProviderConfigManager struct {

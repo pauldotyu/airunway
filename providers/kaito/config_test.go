@@ -106,8 +106,8 @@ func TestProviderConstants(t *testing.T) {
 	if ProviderConfigName != "kaito" {
 		t.Errorf("expected provider config name 'kaito', got %s", ProviderConfigName)
 	}
-	if ProviderVersion != "kaito-provider:v0.1.0" {
-		t.Errorf("expected provider version 'kaito-provider:v0.1.0', got %s", ProviderVersion)
+	if ProviderVersion != "kaito-provider:dev" {
+		t.Errorf("expected default provider version 'kaito-provider:dev', got %s", ProviderVersion)
 	}
 }
 

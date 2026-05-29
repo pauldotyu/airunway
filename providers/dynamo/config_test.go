@@ -140,8 +140,8 @@ func TestProviderConstants(t *testing.T) {
 	if ProviderConfigName != "dynamo" {
 		t.Errorf("expected provider config name 'dynamo', got %s", ProviderConfigName)
 	}
-	if ProviderVersion != "dynamo-provider:v0.2.0" {
-		t.Errorf("expected provider version 'dynamo-provider:v0.2.0', got %s", ProviderVersion)
+	if ProviderVersion != "dynamo-provider:dev" {
+		t.Errorf("expected default provider version 'dynamo-provider:dev', got %s", ProviderVersion)
 	}
 }
 
