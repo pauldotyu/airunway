@@ -38,7 +38,7 @@ const (
 	ProviderConfigName = "kuberay"
 
 	// ProviderVersion is the version of the KubeRay provider
-	ProviderVersion = "kuberay-provider:v0.1.0"
+	ProviderVersion = "kuberay-provider:v0.3.0"
 
 	// ProviderDocumentation is the documentation URL for the KubeRay provider
 	ProviderDocumentation = "https://github.com/kaito-project/airunway/tree/main/docs/providers/kuberay.md"

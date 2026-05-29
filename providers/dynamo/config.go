@@ -39,7 +39,7 @@ const (
 	ProviderConfigName = "dynamo"
 
 	// ProviderVersion is the version of the AIRunway Dynamo provider controller.
-	ProviderVersion = "dynamo-provider:v0.2.0"
+	ProviderVersion = "dynamo-provider:v0.3.0"
 
 	// ProviderDocumentation is the documentation URL for the Dynamo provider
 	ProviderDocumentation = "https://github.com/kaito-project/airunway/tree/main/docs/providers/dynamo.md"

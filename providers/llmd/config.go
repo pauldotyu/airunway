@@ -36,7 +36,7 @@ const (
 	ProviderConfigName = "llmd"
 
 	// ProviderVersion is the version of the llm-d provider
-	ProviderVersion = "llmd-provider:v0.1.0"
+	ProviderVersion = "llmd-provider:v0.3.0"
 
 	// ProviderDocumentation is the documentation URL for the llm-d provider
 	ProviderDocumentation = "https://github.com/kaito-project/airunway/tree/main/docs/providers/llmd.md"

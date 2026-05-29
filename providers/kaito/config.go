@@ -37,7 +37,7 @@ const (
 	ProviderConfigName = "kaito"
 
 	// ProviderVersion is the version of the KAITO provider
-	ProviderVersion = "kaito-provider:v0.1.0"
+	ProviderVersion = "kaito-provider:v0.3.0"
 
 	// ProviderDocumentation is the documentation URL for the KAITO provider
 	ProviderDocumentation = "https://github.com/kaito-project/airunway/tree/main/docs/providers/kaito.md"
