@@ -132,6 +132,16 @@ describe('getK8sErrorStatusCode', () => {
     expect(getK8sErrorStatusCode({ body: { code: 422 } })).toBe(422);
   });
 
+  it('extracts numeric top-level code from ApiException', () => {
+    // @kubernetes/client-node ApiException shape: numeric code, string body
+    expect(getK8sErrorStatusCode({ code: 404, body: 'not json', headers: {} })).toBe(404);
+  });
+
+  it('extracts status code from a JSON string body', () => {
+    const body = JSON.stringify({ kind: 'Status', reason: 'NotFound', code: 404 });
+    expect(getK8sErrorStatusCode({ body })).toBe(404);
+  });
+
   it('returns 500 for unknown errors', () => {
     expect(getK8sErrorStatusCode({})).toBe(500);
     expect(getK8sErrorStatusCode(null)).toBe(500);

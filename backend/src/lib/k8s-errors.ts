@@ -11,7 +11,9 @@ export interface K8sApiError {
   };
   body?: K8sErrorBody | string;
   message?: string;
-  code?: string;
+  // @kubernetes/client-node ApiException exposes the HTTP status as a numeric `code`.
+  // Older/other error shapes may use a string reason code, so allow both.
+  code?: string | number;
 }
 
 /**
@@ -58,8 +60,13 @@ export function extractK8sErrorMessage(error: unknown): string {
     return 'Unknown error occurred';
   }
 
-  // Handle standard Error objects
-  if (error instanceof Error && !(error as K8sApiError).response) {
+  // Handle standard Error objects that carry no K8s body/response to parse.
+  const maybeK8s = error as K8sApiError;
+  if (
+    error instanceof Error &&
+    !maybeK8s.response &&
+    maybeK8s.body === undefined
+  ) {
     return error.message;
   }
 
@@ -174,15 +181,32 @@ export function getK8sErrorStatusCode(error: unknown): number {
 
   const k8sError = error as K8sApiError;
   const statusCode = k8sError.statusCode || k8sError.response?.statusCode;
-  
+
   if (statusCode && statusCode >= 400 && statusCode < 600) {
     return statusCode;
   }
 
-  // Check if it's in the body
+  // @kubernetes/client-node ApiException exposes the HTTP status as a numeric top-level `code`.
+  if (typeof k8sError.code === 'number' && k8sError.code >= 400 && k8sError.code < 600) {
+    return k8sError.code;
+  }
+
+  // Check if it's in the body (object form)
   const body = k8sError.body || k8sError.response?.body;
   if (body && typeof body === 'object' && 'code' in body && typeof body.code === 'number') {
     return body.code;
+  }
+
+  // The body may be a JSON string containing a K8s Status object with a `code`.
+  if (typeof body === 'string') {
+    try {
+      const parsed = JSON.parse(body) as K8sErrorBody;
+      if (typeof parsed.code === 'number' && parsed.code >= 400 && parsed.code < 600) {
+        return parsed.code;
+      }
+    } catch {
+      // Not JSON, fall through
+    }
   }
 
   return 500;
